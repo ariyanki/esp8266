@@ -223,6 +223,8 @@ void handleUpdateRelay() {
   String relaystate=server.arg("state");
   if(RELAY_NO){
     Serial.print("NO ");
+    Serial.print(relayGPIOs[relayno.toInt()-1]);
+    Serial.print(relaystate);
     digitalWrite(relayGPIOs[relayno.toInt()-1], !relaystate.toInt());
   }
   else{
@@ -311,6 +313,18 @@ void setup() {
     }
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
+  }
+
+
+  // Initialize PIN
+  for(int i=1; i<=NUM_RELAYS; i++){
+    pinMode(relayGPIOs[i-1], OUTPUT);
+    if(RELAY_NO){
+      digitalWrite(relayGPIOs[i-1], HIGH);
+    }
+    else{
+      digitalWrite(relayGPIOs[i-1], LOW);
+    }
   }
 
   timeClient.begin();
