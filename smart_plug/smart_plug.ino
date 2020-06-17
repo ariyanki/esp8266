@@ -1,12 +1,9 @@
 // Load Wi-Fi library
 #include <ESP8266WiFi.h>
-#include <Servo.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 #include <ESP8266WebServer.h>
 #include <EEPROM.h>
-
-Servo servo;
 
 // #### Network Configuration ####
 // Access Point network credentials
@@ -16,7 +13,6 @@ const char* ap_password = "nodemcu12345";
 // Set web server port number to 80
 ESP8266WebServer server(80);
 
-
 // #### NTP Configuration ####
 char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 String months[12]={"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
@@ -25,19 +21,14 @@ String months[12]={"January", "February", "March", "April", "May", "June", "July
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "id.pool.ntp.org", (7*3600));
 
-
 // #### Feeding Timer Configuration ####
-int FeedingLength = 24;
-String Feeding[24];
+#define TIMER_LIMIT 24
+String timer[TIMER_LIMIT];
 
-// Servo Setting
-void feeding() {
-  servo.write(30);
-  delay(500);
-  servo.write(0);
-  delay(1000);
-}
-
+// #### Relay Configuration ####
+#define RELAY_NO    true
+#define NUM_RELAYS 6
+int relayGPIOs[NUM_RELAYS] = {14, 27, 26, 32, 15, 2};
 
 // #### EEPROM to store Data ####
 int eepromSize=512;
@@ -46,7 +37,7 @@ int eepromSize=512;
 int ssidLength = 32; 
 int pwdLength = 32;
 int ipLength=15;
-int timeLength=9*FeedingLength;// for 24 times setting, each time 9 char *24
+int timeLength=9*TIMER_LIMIT;// for 24 times setting, each time 9 char *24
 
 // Address Position setting
 int ssidAddr = 0;
@@ -97,7 +88,14 @@ String headerHtml = "<!DOCTYPE html><html>"
   "<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}"
   ".button { background-color: #195B6A; border: none; color: white; padding: 16px 40px;"
   "text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer;}"
-  ".button2 {background-color: #77878A;}</style></head>";
+  ".button2 {background-color: #77878A;}"
+  ".switch {position: relative; display: inline-block; width: 120px; height: 68px} "
+  ".switch input {display: none}"
+  ".slider {position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; border-radius: 34px}"
+  ".slider:before {position: absolute; content: \"\"; height: 52px; width: 52px; left: 8px; bottom: 8px; background-color: #fff; -webkit-transition: .4s; transition: .4s; border-radius: 68px}"
+  "input:checked+.slider {background-color: #2196F3}"
+  "input:checked+.slider:before {-webkit-transform: translateX(52px); -ms-transform: translateX(52px); transform: translateX(52px)}"
+  "</style></head>";
 String footerHtml = "<html>";
 
 String redirectToRootHtml  = "<!DOCTYPE html><html>"
@@ -109,7 +107,32 @@ String savedNotifHtml  = headerHtml + "<body><br/><br/>"
     "<p><a href=\"/\"><button class=\"button button2\">Back to home</button></a></p>"
     "</body>"+footerHtml;
 
+String relayState(int numRelay){
+  if(RELAY_NO){
+    if(digitalRead(relayGPIOs[numRelay-1])){
+      return "";
+    }
+    else {
+      return "checked";
+    }
+  }
+  else {
+    if(digitalRead(relayGPIOs[numRelay-1])){
+      return "checked";
+    }
+    else {
+      return "";
+    }
+  }
+  return "";
+}
+
 void handleRoot() {
+  String buttons ="";
+  for(int i=1; i<=NUM_RELAYS; i++){
+    buttons+= "<h4>Plug #" + String(i) + " - GPIO " + relayGPIOs[i-1] + "</h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"" + String(i) + "\" "+ relayState(i) +"><span class=\"slider\"></span></label>";
+  }
+  
   timeClient.update();
   unsigned long epochTime = timeClient.getEpochTime();
   struct tm *ptm = gmtime ((time_t *)&epochTime);
@@ -125,16 +148,16 @@ void handleRoot() {
     "<p>If the datetime above correct then your wifi configuration is correct.</p>"
     "<p><a href=\"/wificonfig\"><button class=\"button button2\">Wifi Config</button></a></p>"
     "<p><a href=\"/timerconfig\"><button class=\"button button2\">Timer Config</button></a></p>"
-    "<p><a href=\"/feeding\"><button class=\"button button2\">Feeding Test</button></a></p>"
+    "<p>"+buttons+"</p>"
+    "<script>function toggleCheckbox(element) {"
+    "var xhr = new XMLHttpRequest();"
+    "if(element.checked){ xhr.open(\"GET\", \"/updaterelay?relay=\"+element.id+\"&state=1\", true); }"
+    "else { xhr.open(\"GET\", \"/updaterelay?relay=\"+element.id+\"&state=0\", true); }"
+    "xhr.send();"
+    "}</script>"
     "</body>"+footerHtml;
             
   server.send(200, "text/html", htmlRes);
-}
-
-void handleFeeding() {
-  feeding();
-    
-  server.send(200, "text/html", redirectToRootHtml);
 }
 
 void handleWifiConfigForm() {
@@ -179,7 +202,7 @@ void handleTimerConfigForm() {
     "<form method=post action=\"/savetimerconfig\">"
     "<p>Format hour:minute:second without \"0\"<br/>"
     "For multiple time input with \";\" delimitier<br/>"
-    "To save memory it has limit "+String(FeedingLength)+" times setting maximum<br/>"
+    "To save memory it has limit "+String(TIMER_LIMIT)+" times setting maximum<br/>"
     "<b>Example:</b> 1:30:0;6:8:0;18:7:12</p>"
     "<p><b>Timer</b></br><input type=text name=timer id=timer value=\""+strFeedingTime+"\"></p>"
     "<p><input type=submit value=Save> <input type=button value=Cancel onclick=\"window.location.href = '/';\"></p>"
@@ -195,12 +218,23 @@ void handleSaveTimerConfigForm() {
   server.send(200, "text/html", savedNotifHtml);
 }
 
+void handleUpdateRelay() {
+  String relayno=server.arg("relay");
+  String relaystate=server.arg("state");
+  if(RELAY_NO){
+    Serial.print("NO ");
+    digitalWrite(relayGPIOs[relayno.toInt()-1], !relaystate.toInt());
+  }
+  else{
+    Serial.print("NC ");
+    digitalWrite(relayGPIOs[relayno.toInt()-1], relaystate.toInt());
+  }
+  server.send(200, "text/plain", "OK");
+}
+
 void setup() {
   Serial.begin(115200);
   delay(100);
-  // Initialize servo pin
-  servo.attach(5);// D1
-  servo.write(0);
 
   // Initialize Access Point
   WiFi.softAP(ap_ssid, ap_password);
@@ -279,43 +313,19 @@ void setup() {
     Serial.println(WiFi.localIP());
   }
 
-  // GET Feeding time for EEPROM
-  String strFeedingTime = eeprom_read(timeAddr, timeLength);
-  int f = 0, r=0;
-  for (int i=0; i < strFeedingTime.length(); i++)
-  { 
-   if(strFeedingTime.charAt(i) == ';') 
-    { 
-      Feeding[f] = strFeedingTime.substring(r, i); 
-      Serial.println(Feeding[f]);
-      r=(i+1); 
-      f++;
-    }
-  }
-  
-
   timeClient.begin();
   
   // start web server
   server.on("/", handleRoot);
-  server.on("/feeding", handleFeeding);
   server.on("/wificonfig", handleWifiConfigForm);
   server.on("/savewificonfig", HTTP_POST, handleSaveWifiConfigForm);
   server.on("/timerconfig", handleTimerConfigForm);
   server.on("/savetimerconfig", HTTP_POST, handleSaveTimerConfigForm);
+  server.on("/updaterelay", HTTP_GET, handleUpdateRelay);
   server.begin();
   
 }
 
 void loop(){
   server.handleClient();
-  // Set delay to update the time
-  delay(500);
-  timeClient.update();
-  String checkTime = String(timeClient.getHours())+":"+String(timeClient.getMinutes())+":"+String(timeClient.getSeconds());
-  for (int i=0;i<FeedingLength;i++){
-    if (Feeding[i] == checkTime) {
-      feeding();
-    }
-  }
 }

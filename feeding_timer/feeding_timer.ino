@@ -27,8 +27,8 @@ NTPClient timeClient(ntpUDP, "id.pool.ntp.org", (7*3600));
 
 
 // #### Feeding Timer Configuration ####
-int FeedingLength = 24;
-String Feeding[24];
+#define TIMER_LIMIT 24
+String timer[TIMER_LIMIT];
 
 // Servo Setting
 void feeding() {
@@ -46,7 +46,7 @@ int eepromSize=512;
 int ssidLength = 32; 
 int pwdLength = 32;
 int ipLength=15;
-int timeLength=9*FeedingLength;// for 24 times setting, each time 9 char *24
+int timeLength=9*TIMER_LIMIT;// for 24 times setting, each time 9 char *24
 
 // Address Position setting
 int ssidAddr = 0;
@@ -179,7 +179,7 @@ void handleTimerConfigForm() {
     "<form method=post action=\"/savetimerconfig\">"
     "<p>Format hour:minute:second without \"0\"<br/>"
     "For multiple time input with \";\" delimitier<br/>"
-    "To save memory it has limit "+String(FeedingLength)+" times setting maximum<br/>"
+    "To save memory it has limit "+String(TIMER_LIMIT)+" times setting maximum<br/>"
     "<b>Example:</b> 1:30:0;6:8:0;18:7:12</p>"
     "<p><b>Timer</b></br><input type=text name=timer id=timer value=\""+strFeedingTime+"\"></p>"
     "<p><input type=submit value=Save> <input type=button value=Cancel onclick=\"window.location.href = '/';\"></p>"
@@ -286,8 +286,7 @@ void setup() {
   { 
    if(strFeedingTime.charAt(i) == ';') 
     { 
-      Feeding[f] = strFeedingTime.substring(r, i); 
-      Serial.println(Feeding[f]);
+      timer[f] = strFeedingTime.substring(r, i); 
       r=(i+1); 
       f++;
     }
@@ -313,8 +312,8 @@ void loop(){
   delay(500);
   timeClient.update();
   String checkTime = String(timeClient.getHours())+":"+String(timeClient.getMinutes())+":"+String(timeClient.getSeconds());
-  for (int i=0;i<FeedingLength;i++){
-    if (Feeding[i] == checkTime) {
+  for (int i=0;i<TIMER_LIMIT;i++){
+    if (timer[i] == checkTime) {
       feeding();
     }
   }
