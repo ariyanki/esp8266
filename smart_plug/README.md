@@ -17,18 +17,18 @@ After you connect to that Access point, go to **http://192.168.4.1** (default AP
 
 **Homepage**
 <p align="center">
-  <img src="/ariyanki/nodemcu-iot/blob/master/Docs/image/smart_plug/home.png?raw=true" width="250" title="hover text">
+  <img src="https://raw.githubusercontent.com/ariyanki/nodemcu-iot/master/Docs/image/smart_plug/home.png" width="250" title="hover text">
 </p>
 
 
 **Wifi Config**
 <p align="center">
-  <img src="http://github.com/ariyanki/nodemcu-iot/blob/master/Docs/image/smart_plug/wifi-config.png?raw=true" width="250" title="hover text">
+  <img src="https://raw.githubusercontent.com/ariyanki/nodemcu-iot/master/Docs/image/smart_plug/wifi-config.png" width="250" title="hover text">
 </p>
 
 **Saved Notification**
 <p align="center">
-  <img src="http://github.com/ariyanki/nodemcu-iot/blob/master/Docs/image/smart_plug/saved-notif.png?raw=true" width="250" title="hover text">
+  <img src="https://raw.githubusercontent.com/ariyanki/nodemcu-iot/master/Docs/image/smart_plug/saved-notif.png" width="250" title="hover text">
 </p>
 
 **Plug GPIO Config**
