@@ -30,15 +30,13 @@ String timer[TIMER_LIMIT];
 #define NUM_RELAYS 6 // this number impact to eeprom size max 4096, for 24 times setting, each time 9 char *24 * num relays 
 
 // #### EEPROM to store Data ####
-int eepromSize=3072;
-
 // character length setting
 int singleLength = 1; 
 int ssidLength = 32; 
 int pwdLength = 32;
 int ipLength=15;
 int gpioLength=NUM_RELAYS;
-int timeLength=9*TIMER_LIMIT*NUM_RELAYS;
+int timeLength=9*TIMER_LIMIT;
 
 // Address Position setting
 int ssidAddr = 0;
@@ -48,7 +46,11 @@ int ipSubnetAddr = ipAddr+ipLength;
 int ipGatewayAddr = ipSubnetAddr+ipLength;
 int ipDNSAddr = ipGatewayAddr+ipLength;
 int gpioAddr = ipDNSAddr+ipLength;
-int timeAddr = gpioAddr+gpioLength;
+int timeOnAddr = gpioAddr+gpioLength;
+int timeOffAddr = timeOnAddr+(NUM_RELAYS*timeLength);
+
+int eepromSize=timeOffAddr+(NUM_RELAYS*timeLength);
+
 
 void eeprom_write(String buffer, int addr, int length) {
   int bufferLength = buffer.length();
@@ -234,15 +236,20 @@ void handleSaveGPIOConfigForm() {
 
 
 void handleTimerConfigForm() {
-  String strTimer = eeprom_read(timeAddr, timeLength);
+  String inputForm="";
+  for(int i=0; i<NUM_RELAYS; i++){
+    String strTimerOn = eeprom_read(timeOnAddr+(i*timeLength), timeLength);
+    String strTimerOff = eeprom_read(timeOffAddr+(i*timeLength), timeLength);
+    inputForm += "<p><b>Timer Plug #"+String(i+1)+" On</b></br><input type=text name=gpioon"+i+" id=gpioon"+i+" value=\""+strTimerOn+"\"></p>";
+    inputForm += "<p><b>Timer Plug #"+String(i+1)+" Off</b></br><input type=text name=gpiooff"+i+" id=gpiooff"+i+" value=\""+strTimerOff+"\"></p>";
+  }
   
   String htmlRes  = headerHtml + "<body><h1>Timer Config</h1>"
     "<form method=post action=\"/savetimerconfig\">"
     "<p>Format hour:minute:second without \"0\"<br/>"
     "For multiple time input with \";\" delimitier<br/>"
-    "To save memory it has limit "+String(TIMER_LIMIT)+" times setting maximum<br/>"
-    "<b>Example:</b> 1:30:0;6:8:0;18:7:12</p>"
-    "<p><b>Timer</b></br><input type=text name=timer id=timer value=\""+strTimer+"\"></p>"
+    "To save memory it has each limit "+String(TIMER_LIMIT)+" times setting maximum<br/>"
+    "<b>Example:</b> 1:30:0;6:8:0;18:7:12</p>"+inputForm+""
     "<p><input type=submit value=Save> <input type=button value=Cancel onclick=\"window.location.href = '/';\"></p>"
     "</form>"
     "</body>"+footerHtml;
@@ -251,7 +258,10 @@ void handleTimerConfigForm() {
 }
 
 void handleSaveTimerConfigForm() {
-  eeprom_write(server.arg("timer"), timeAddr,timeLength);
+  for(int i=0; i<NUM_RELAYS; i++){
+    eeprom_write(server.arg("gpioon"+String(i)), timeOnAddr+(i*timeLength),timeLength);
+    eeprom_write(server.arg("gpiooff"+String(i)), timeOffAddr+(i*timeLength),timeLength);
+  }
   
   server.send(200, "text/html", savedNotifHtml);
 }
@@ -291,7 +301,7 @@ void setup() {
 
   // GET Wifi Config from EEPROM
   String ssid = eeprom_read(ssidAddr, ssidLength);
-  Serial.println("EEPROM Config:");
+  Serial.println("EEPROM "+String(eepromSize)+" Config:");
   Serial.println(ssid);
   if(ssid.length()>0){
     String password = eeprom_read(pwdAddr, pwdLength);

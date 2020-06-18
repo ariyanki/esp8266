@@ -25,13 +25,11 @@ String months[12]={"January", "February", "March", "April", "May", "June", "July
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "id.pool.ntp.org", (7*3600));
 
-// #### EEPROM to store Data ####
-int eepromSize=512;
-
 // #### Timer Configuration ####
 #define TIMER_LIMIT 24 // for 24 times setting, each time 9 char *24
 String timer[TIMER_LIMIT];
 
+// #### EEPROM to store Data ####
 // character length setting
 int singleLength = 1; 
 int ssidLength = 32; 
@@ -50,6 +48,8 @@ int gpioAddr = ipDNSAddr+ipLength;
 int servoWriteFromAddr = gpioAddr+singleLength;
 int servoWriteToAddr = servoWriteFromAddr+singleLength;
 int timeAddr = servoWriteFromAddr+singleLength;
+
+int eepromSize=timeAddr+timeLength;
 
 void eeprom_write(String buffer, int addr, int length) {
   int bufferLength = buffer.length();
