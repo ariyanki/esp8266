@@ -21,13 +21,14 @@ String months[12]={"January", "February", "March", "April", "May", "June", "July
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "id.pool.ntp.org", (7*3600));
 
-// #### Feeding Timer Configuration ####
-#define TIMER_LIMIT 24 // for 24 times setting, each time 9 char *24
-String timer[TIMER_LIMIT];
-
 // #### Relay Configuration ####
 #define RELAY_NO    true
 #define NUM_RELAYS 6 // this number impact to eeprom size max 4096, for 24 times setting, each time 9 char *24 * num relays 
+
+// #### Feeding Timer Configuration ####
+#define TIMER_LIMIT 24 // for 24 times setting, each time 9 char *24
+String timerOn[NUM_RELAYS][TIMER_LIMIT];
+String timerOff[NUM_RELAYS][TIMER_LIMIT];
 
 // #### EEPROM to store Data ####
 // character length setting
@@ -262,24 +263,52 @@ void handleSaveTimerConfigForm() {
     eeprom_write(server.arg("gpioon"+String(i)), timeOnAddr+(i*timeLength),timeLength);
     eeprom_write(server.arg("gpiooff"+String(i)), timeOffAddr+(i*timeLength),timeLength);
   }
+  readTimer();
   
-  server.send(200, "text/html", savedNotifHtml);
+  server.send(200, "text/html", redirectToRootHtml);
 }
 
 void handleUpdateRelay() {
-  int relayno=server.arg("relay").toInt();
-  int relaystate=server.arg("state").toInt();
+  updateRelay(server.arg("relay").toInt(),server.arg("state").toInt());
+  
+  server.send(200, "text/plain", "OK");
+}
+
+void updateRelay(int relayno, int relaystate){
   if(RELAY_NO){
-    Serial.print("NO ");
-    Serial.print(eeprom_read_single(gpioAddr+relayno));
-    Serial.print(relaystate);
     digitalWrite(eeprom_read_single(gpioAddr+relayno), !relaystate);
   }
   else{
-    Serial.print("NC ");
     digitalWrite(eeprom_read_single(gpioAddr+relayno), relaystate);
   }
-  server.send(200, "text/plain", "OK");
+}
+
+void readTimer(){
+  // GET timer for EEPROM
+  for(int i=0; i<NUM_RELAYS; i++){
+    String strTime = eeprom_read(timeOnAddr+(i*timeLength), timeLength);
+    int f = 0, r=0;
+    for (int j=0; j < strTime.length(); j++)
+    { 
+     if(strTime.charAt(j) == ';') 
+      { 
+        timerOn[i][f] = strTime.substring(r, j); 
+        r=(j+1); 
+        f++;
+      }
+    }
+    strTime = eeprom_read(timeOffAddr+(i*timeLength), timeLength);
+    f = 0, r=0;
+    for (int j=0; j < strTime.length(); j++)
+    { 
+     if(strTime.charAt(j) == ';') 
+      { 
+        timerOff[i][f] = strTime.substring(r, j); 
+        r=(j+1); 
+        f++;
+      }
+    }
+  }
 }
 
 void setup() {
@@ -320,7 +349,6 @@ void setup() {
       
     }
 
-    Serial.println("");
     if(i>20) {
       Serial.println("WiFi not connected. Please use \""+String(ap_ssid)+"\" AP to config");
     }else{
@@ -375,6 +403,8 @@ void setup() {
     }
   }
 
+  readTimer();
+  
   timeClient.begin();
   
   // start web server
@@ -392,4 +422,20 @@ void setup() {
 
 void loop(){
   server.handleClient();
+  // Set delay to update the time
+  delay(500);
+  timeClient.update();
+
+  // Execute Timer
+  String checkTime = String(timeClient.getHours())+":"+String(timeClient.getMinutes())+":"+String(timeClient.getSeconds());    
+  for(int i=0; i<NUM_RELAYS; i++){
+    for (int j=0;j<TIMER_LIMIT;j++){
+      if (timerOn[i][j] == checkTime) {
+        updateRelay(i,1);
+      }
+      if (timerOff[i][j] == checkTime) {
+        updateRelay(i,0);
+      }
+    }
+  }
 }
