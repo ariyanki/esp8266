@@ -25,37 +25,31 @@ String months[12]={"January", "February", "March", "April", "May", "June", "July
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "id.pool.ntp.org", (7*3600));
 
-
-// #### Feeding Timer Configuration ####
-#define TIMER_LIMIT 24
-String timer[TIMER_LIMIT];
-
-// Servo Setting
-void feeding() {
-  servo.write(30);
-  delay(500);
-  servo.write(0);
-  delay(1000);
-}
-
-
 // #### EEPROM to store Data ####
 int eepromSize=512;
 
+// #### Timer Configuration ####
+#define TIMER_LIMIT 24 // for 24 times setting, each time 9 char *24
+String timer[TIMER_LIMIT];
+
 // character length setting
+int singleLength = 1; 
 int ssidLength = 32; 
 int pwdLength = 32;
 int ipLength=15;
-int timeLength=9*TIMER_LIMIT;// for 24 times setting, each time 9 char *24
+int timeLength=9*TIMER_LIMIT;
 
 // Address Position setting
 int ssidAddr = 0;
 int pwdAddr = ssidAddr+ssidLength;
-int ipAddr=pwdAddr+pwdLength;
-int ipSubnetAddr=ipAddr+ipLength;
-int ipGatewayAddr=ipSubnetAddr+ipLength;
-int ipDNSAddr=ipGatewayAddr+ipLength;
-int timeAddr=ipDNSAddr+ipLength;
+int ipAddr = pwdAddr+pwdLength;
+int ipSubnetAddr = ipAddr+ipLength;
+int ipGatewayAddr = ipSubnetAddr+ipLength;
+int ipDNSAddr = ipGatewayAddr+ipLength;
+int gpioAddr = ipDNSAddr+ipLength;
+int servoWriteFromAddr = gpioAddr+singleLength;
+int servoWriteToAddr = servoWriteFromAddr+singleLength;
+int timeAddr = servoWriteFromAddr+singleLength;
 
 void eeprom_write(String buffer, int addr, int length) {
   int bufferLength = buffer.length();
@@ -82,6 +76,32 @@ String eeprom_read(int addr, int length) {
   return buffer;
 }
 
+void eeprom_write_single(int value, int addr) {
+  EEPROM.begin(eepromSize);
+  EEPROM.write(addr, value);
+  EEPROM.commit();
+}
+
+int eeprom_read_single(int addr) {
+  EEPROM.begin(eepromSize); 
+  return EEPROM.read(addr);
+}
+
+
+void readTimer(){
+  // GET timer for EEPROM
+  String strTime = eeprom_read(timeAddr, timeLength);
+  int f = 0, r=0;
+  for (int i=0; i < strTime.length(); i++)
+  { 
+   if(strTime.charAt(i) == ';') 
+    { 
+      timer[f] = strTime.substring(r, i); 
+      r=(i+1); 
+      f++;
+    }
+  }
+}
 
 // #### HTTP Configuration ####
 // Current time
@@ -119,12 +139,14 @@ void handleRoot() {
   int currentYear = ptm->tm_year+1900;
   String currentDate = String(monthDay) + " " + String(currentMonthName) + " " + String(currentYear);
   
-  String htmlRes  = headerHtml + "<body><h1>My Home Setting</h1>"
+  String htmlRes  = headerHtml + "<body><h1>Smart Feeding</h1>"
     "<p>"+String(daysOfTheWeek[timeClient.getDay()])+", "+currentDate+" "+timeClient.getFormattedTime()+"</p>"
     "<p>To make this timer work, please make sure wifi configuration connected to internet because it is connected to NTP Server.</p>"
     "<p>If the datetime above correct then your wifi configuration is correct.</p>"
     "<p><a href=\"/wificonfig\"><button class=\"button button2\">Wifi Config</button></a></p>"
+    "<p><a href=\"/servoconfig\"><button class=\"button button2\">Servo Config</button></a></p>"
     "<p><a href=\"/timerconfig\"><button class=\"button button2\">Timer Config</button></a></p>"
+    "<p></p>"
     "<p><a href=\"/feeding\"><button class=\"button button2\">Feeding Test</button></a></p>"
     "</body>"+footerHtml;
             
@@ -132,7 +154,7 @@ void handleRoot() {
 }
 
 void handleFeeding() {
-  feeding();
+  servoWrite();
     
   server.send(200, "text/html", redirectToRootHtml);
 }
@@ -172,8 +194,33 @@ void handleSaveWifiConfigForm() {
   server.send(200, "text/html", savedNotifHtml);
 }
 
+void handleServoConfigForm() {
+  String strGPIO = String(eeprom_read_single(gpioAddr));
+  String strWriteFrom = String(eeprom_read_single(servoWriteFromAddr));
+  String strWriteTo = String(eeprom_read_single(servoWriteToAddr));
+  
+  String htmlRes  = headerHtml + "<body><h1>Servo Config</h1>"
+    "<form method=post action=\"/saveservoconfig\">"
+    "<p><b>GPIO Number</b></br><input type=text name=gpio id=gpio value=\""+strGPIO+"\"></p>"
+    "<p><b>Write From</b></br><input type=text name=write_from id=write_from value=\""+strWriteFrom+"\"></p>"
+    "<p><b>Write To</b></br><input type=text name=write_to id=write_to value=\""+strWriteTo+"\"></p>"
+    "<p><input type=submit value=Save> <input type=button value=Cancel onclick=\"window.location.href = '/';\"></p>"
+    "</form>"
+    "</body>"+footerHtml;
+  
+  server.send(200, "text/html", htmlRes);
+}
+
+void handleSaveServoConfigForm() {
+  eeprom_write_single(server.arg("gpio").toInt(), gpioAddr);
+  eeprom_write_single(server.arg("write_from").toInt(), servoWriteFromAddr);
+  eeprom_write_single (server.arg("write_to").toInt(), servoWriteToAddr);
+  
+  server.send(200, "text/html", savedNotifHtml);
+}
+
 void handleTimerConfigForm() {
-  String strFeedingTime = eeprom_read(timeAddr, timeLength);
+  String strTimer = eeprom_read(timeAddr, timeLength);
   
   String htmlRes  = headerHtml + "<body><h1>Timer Config</h1>"
     "<form method=post action=\"/savetimerconfig\">"
@@ -181,7 +228,7 @@ void handleTimerConfigForm() {
     "For multiple time input with \";\" delimitier<br/>"
     "To save memory it has limit "+String(TIMER_LIMIT)+" times setting maximum<br/>"
     "<b>Example:</b> 1:30:0;6:8:0;18:7:12</p>"
-    "<p><b>Timer</b></br><input type=text name=timer id=timer value=\""+strFeedingTime+"\"></p>"
+    "<p><b>Timer</b></br><input type=text name=timer id=timer value=\""+strTimer+"\"></p>"
     "<p><input type=submit value=Save> <input type=button value=Cancel onclick=\"window.location.href = '/';\"></p>"
     "</form>"
     "</body>"+footerHtml;
@@ -191,15 +238,23 @@ void handleTimerConfigForm() {
 
 void handleSaveTimerConfigForm() {
   eeprom_write(server.arg("timer"), timeAddr,timeLength);
+  readTimer();
   
-  server.send(200, "text/html", savedNotifHtml);
+  server.send(200, "text/html", redirectToRootHtml);
+}
+
+void servoWrite() {
+  servo.write(eeprom_read_single(servoWriteToAddr));
+  delay(500);
+  servo.write(eeprom_read_single(servoWriteFromAddr));
+  delay(1000);
 }
 
 void setup() {
   Serial.begin(115200);
   delay(100);
   // Initialize servo pin
-  servo.attach(5);// D1
+  servo.attach(eeprom_read_single(gpioAddr));// D1
   servo.write(0);
 
   // Initialize Access Point
@@ -279,19 +334,7 @@ void setup() {
     Serial.println(WiFi.localIP());
   }
 
-  // GET Feeding time for EEPROM
-  String strFeedingTime = eeprom_read(timeAddr, timeLength);
-  int f = 0, r=0;
-  for (int i=0; i < strFeedingTime.length(); i++)
-  { 
-   if(strFeedingTime.charAt(i) == ';') 
-    { 
-      timer[f] = strFeedingTime.substring(r, i); 
-      r=(i+1); 
-      f++;
-    }
-  }
-  
+  readTimer();
 
   timeClient.begin();
   
@@ -300,6 +343,8 @@ void setup() {
   server.on("/feeding", handleFeeding);
   server.on("/wificonfig", handleWifiConfigForm);
   server.on("/savewificonfig", HTTP_POST, handleSaveWifiConfigForm);
+  server.on("/servoconfig", handleServoConfigForm);
+  server.on("/saveservoconfig", HTTP_POST, handleSaveServoConfigForm);
   server.on("/timerconfig", handleTimerConfigForm);
   server.on("/savetimerconfig", HTTP_POST, handleSaveTimerConfigForm);
   server.begin();
@@ -314,7 +359,7 @@ void loop(){
   String checkTime = String(timeClient.getHours())+":"+String(timeClient.getMinutes())+":"+String(timeClient.getSeconds());
   for (int i=0;i<TIMER_LIMIT;i++){
     if (timer[i] == checkTime) {
-      feeding();
+      servoWrite();
     }
   }
 }

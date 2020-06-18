@@ -22,31 +22,33 @@ WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "id.pool.ntp.org", (7*3600));
 
 // #### Feeding Timer Configuration ####
-#define TIMER_LIMIT 24
+#define TIMER_LIMIT 24 // for 24 times setting, each time 9 char *24
 String timer[TIMER_LIMIT];
 
 // #### Relay Configuration ####
 #define RELAY_NO    true
-#define NUM_RELAYS 6
-int relayGPIOs[NUM_RELAYS] = {14, 27, 26, 32, 15, 2};
+#define NUM_RELAYS 6 // this number impact to eeprom size max 4096, for 24 times setting, each time 9 char *24 * num relays 
 
 // #### EEPROM to store Data ####
-int eepromSize=512;
+int eepromSize=3072;
 
 // character length setting
+int singleLength = 1; 
 int ssidLength = 32; 
 int pwdLength = 32;
 int ipLength=15;
-int timeLength=9*TIMER_LIMIT;// for 24 times setting, each time 9 char *24
+int gpioLength=NUM_RELAYS;
+int timeLength=9*TIMER_LIMIT*NUM_RELAYS;
 
 // Address Position setting
 int ssidAddr = 0;
 int pwdAddr = ssidAddr+ssidLength;
-int ipAddr=pwdAddr+pwdLength;
-int ipSubnetAddr=ipAddr+ipLength;
-int ipGatewayAddr=ipSubnetAddr+ipLength;
-int ipDNSAddr=ipGatewayAddr+ipLength;
-int timeAddr=ipDNSAddr+ipLength;
+int ipAddr = pwdAddr+pwdLength;
+int ipSubnetAddr = ipAddr+ipLength;
+int ipGatewayAddr = ipSubnetAddr+ipLength;
+int ipDNSAddr = ipGatewayAddr+ipLength;
+int gpioAddr = ipDNSAddr+ipLength;
+int timeAddr = gpioAddr+gpioLength;
 
 void eeprom_write(String buffer, int addr, int length) {
   int bufferLength = buffer.length();
@@ -71,6 +73,17 @@ String eeprom_read(int addr, int length) {
       buffer += char(EEPROM.read(L));
   }
   return buffer;
+}
+
+void eeprom_write_single(int value, int addr) {
+  EEPROM.begin(eepromSize);
+  EEPROM.write(addr, value);
+  EEPROM.commit();
+}
+
+int eeprom_read_single(int addr) {
+  EEPROM.begin(eepromSize); 
+  return EEPROM.read(addr);
 }
 
 
@@ -107,9 +120,9 @@ String savedNotifHtml  = headerHtml + "<body><br/><br/>"
     "<p><a href=\"/\"><button class=\"button button2\">Back to home</button></a></p>"
     "</body>"+footerHtml;
 
-String relayState(int numRelay){
+String relayState(int relayno){
   if(RELAY_NO){
-    if(digitalRead(relayGPIOs[numRelay-1])){
+    if(digitalRead(eeprom_read_single(gpioAddr+relayno))){
       return "";
     }
     else {
@@ -117,7 +130,7 @@ String relayState(int numRelay){
     }
   }
   else {
-    if(digitalRead(relayGPIOs[numRelay-1])){
+    if(digitalRead(eeprom_read_single(gpioAddr+relayno))){
       return "checked";
     }
     else {
@@ -129,8 +142,8 @@ String relayState(int numRelay){
 
 void handleRoot() {
   String buttons ="";
-  for(int i=1; i<=NUM_RELAYS; i++){
-    buttons+= "<h4>Plug #" + String(i) + " - GPIO " + relayGPIOs[i-1] + "</h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"" + String(i) + "\" "+ relayState(i) +"><span class=\"slider\"></span></label>";
+  for(int i=0; i<NUM_RELAYS; i++){
+    buttons+= "<h4>Plug #" + String(i+1) + " - GPIO " + eeprom_read_single(gpioAddr+i) + "</h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"" + String(i) + "\" "+ relayState(i) +"><span class=\"slider\"></span></label>";
   }
   
   timeClient.update();
@@ -142,11 +155,12 @@ void handleRoot() {
   int currentYear = ptm->tm_year+1900;
   String currentDate = String(monthDay) + " " + String(currentMonthName) + " " + String(currentYear);
   
-  String htmlRes  = headerHtml + "<body><h1>My Home Setting</h1>"
+  String htmlRes  = headerHtml + "<body><h1>Smart Plug</h1>"
     "<p>"+String(daysOfTheWeek[timeClient.getDay()])+", "+currentDate+" "+timeClient.getFormattedTime()+"</p>"
     "<p>To make this timer work, please make sure wifi configuration connected to internet because it is connected to NTP Server.</p>"
     "<p>If the datetime above correct then your wifi configuration is correct.</p>"
     "<p><a href=\"/wificonfig\"><button class=\"button button2\">Wifi Config</button></a></p>"
+    "<p><a href=\"/gpioconfig\"><button class=\"button button2\">Plug GPIO Config</button></a></p>"
     "<p><a href=\"/timerconfig\"><button class=\"button button2\">Timer Config</button></a></p>"
     "<p>"+buttons+"</p>"
     "<script>function toggleCheckbox(element) {"
@@ -195,8 +209,32 @@ void handleSaveWifiConfigForm() {
   server.send(200, "text/html", savedNotifHtml);
 }
 
+void handleGPIOConfigForm() {
+  String inputForm="";
+  for(int i=0; i<NUM_RELAYS; i++){
+    inputForm += "<p><b>Plug #"+String(i+1)+" GPIO Number</b></br><input type=text name=gpio"+i+" id=gpio"+i+" value=\""+eeprom_read_single(gpioAddr+i)+"\"></p>";
+  }
+  
+  String htmlRes  = headerHtml + "<body><h1>Plug GPIO Config</h1>"
+    "<form method=post action=\"/savegpioconfig\">"+inputForm+""
+    "<p><input type=submit value=Save> <input type=button value=Cancel onclick=\"window.location.href = '/';\"></p>"
+    "</form>"
+    "</body>"+footerHtml;
+  
+  server.send(200, "text/html", htmlRes);
+}
+
+void handleSaveGPIOConfigForm() {
+  for(int i=0; i<NUM_RELAYS; i++){
+    eeprom_write_single(server.arg("gpio"+String(i)).toInt(), gpioAddr+i);
+  }
+  
+  server.send(200, "text/html", savedNotifHtml);
+}
+
+
 void handleTimerConfigForm() {
-  String strFeedingTime = eeprom_read(timeAddr, timeLength);
+  String strTimer = eeprom_read(timeAddr, timeLength);
   
   String htmlRes  = headerHtml + "<body><h1>Timer Config</h1>"
     "<form method=post action=\"/savetimerconfig\">"
@@ -204,7 +242,7 @@ void handleTimerConfigForm() {
     "For multiple time input with \";\" delimitier<br/>"
     "To save memory it has limit "+String(TIMER_LIMIT)+" times setting maximum<br/>"
     "<b>Example:</b> 1:30:0;6:8:0;18:7:12</p>"
-    "<p><b>Timer</b></br><input type=text name=timer id=timer value=\""+strFeedingTime+"\"></p>"
+    "<p><b>Timer</b></br><input type=text name=timer id=timer value=\""+strTimer+"\"></p>"
     "<p><input type=submit value=Save> <input type=button value=Cancel onclick=\"window.location.href = '/';\"></p>"
     "</form>"
     "</body>"+footerHtml;
@@ -219,17 +257,17 @@ void handleSaveTimerConfigForm() {
 }
 
 void handleUpdateRelay() {
-  String relayno=server.arg("relay");
-  String relaystate=server.arg("state");
+  int relayno=server.arg("relay").toInt();
+  int relaystate=server.arg("state").toInt();
   if(RELAY_NO){
     Serial.print("NO ");
-    Serial.print(relayGPIOs[relayno.toInt()-1]);
+    Serial.print(eeprom_read_single(gpioAddr+relayno));
     Serial.print(relaystate);
-    digitalWrite(relayGPIOs[relayno.toInt()-1], !relaystate.toInt());
+    digitalWrite(eeprom_read_single(gpioAddr+relayno), !relaystate);
   }
   else{
     Serial.print("NC ");
-    digitalWrite(relayGPIOs[relayno.toInt()-1], relaystate.toInt());
+    digitalWrite(eeprom_read_single(gpioAddr+relayno), relaystate);
   }
   server.send(200, "text/plain", "OK");
 }
@@ -317,13 +355,13 @@ void setup() {
 
 
   // Initialize PIN
-  for(int i=1; i<=NUM_RELAYS; i++){
-    pinMode(relayGPIOs[i-1], OUTPUT);
+  for(int i=0; i<NUM_RELAYS; i++){
+    pinMode(eeprom_read_single(gpioAddr+i), OUTPUT);
     if(RELAY_NO){
-      digitalWrite(relayGPIOs[i-1], HIGH);
+      digitalWrite(eeprom_read_single(gpioAddr+i), HIGH);
     }
     else{
-      digitalWrite(relayGPIOs[i-1], LOW);
+      digitalWrite(eeprom_read_single(gpioAddr+i), LOW);
     }
   }
 
@@ -333,6 +371,8 @@ void setup() {
   server.on("/", handleRoot);
   server.on("/wificonfig", handleWifiConfigForm);
   server.on("/savewificonfig", HTTP_POST, handleSaveWifiConfigForm);
+  server.on("/gpioconfig", handleGPIOConfigForm);
+  server.on("/savegpioconfig", HTTP_POST, handleSaveGPIOConfigForm);
   server.on("/timerconfig", handleTimerConfigForm);
   server.on("/savetimerconfig", HTTP_POST, handleSaveTimerConfigForm);
   server.on("/updaterelay", HTTP_GET, handleUpdateRelay);
