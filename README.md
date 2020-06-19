@@ -2,7 +2,7 @@
 
 Click this to know About [NodeMCU V2](https://docs.zerynth.com/latest/official/board.zerynth.nodemcu2/docs/index.html)
 
-Use Arduino IDE to program the NodeMCU, search how to do it on google.
+Use **Arduino IDE** to program the NodeMCU, search how to do it on google.
 
 This is my code collection for my NodeMCU V2 board.
 
