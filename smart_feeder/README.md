@@ -17,7 +17,7 @@ After you connect to that Access point, go to **http://192.168.4.1** (default AP
 
 **Homepage**
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/smart_feeder/home.png" width="250" title="hover text">
+  <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/smart_feeder/homepage.png" width="250" title="hover text">
 </p>
 
 
