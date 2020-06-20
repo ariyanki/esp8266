@@ -1,10 +1,10 @@
 # ESP8266 Sketch Collection
 
-I use ESP-01 and NodeMCU V2 board for this project. I made this code to **easily configure wifi connection, gpio, and timer without re-upload the sketch**.
+I use ESP-01 and NodeMCU V2 board for this project. I made this sketch to **easily configure wifi connection, gpio, and timer without re-upload the sketch**.
 
 #### Arduino IDE
 
-Search how to program esp8266 with Arduino IDE on google.
+Search on google How to [Install ESP8266 in Arduino IDE (Windows, Mac OS X, Linux))](https://www.google.com/search?q=Install+ESP8266+in+Arduino+IDE+(Windows%2C+Mac+OS+X%2C+Linux)&oq=Install+ESP8266+in+Arduino+IDE+(Windows%2C+Mac+OS+X%2C+Linux)&aqs=chrome..69i57j69i60.567j0j9&sourceid=chrome&ie=UTF-8).
 
 **My sketch collection**
 
