@@ -7,8 +7,8 @@ For the first time, before you upload your sketch to the board, please see this 
 
 ```
 // Access Point network credentials
-const char* ap_ssid     = "nodemcu";
-const char* ap_password = "nodemcu12345";
+const char* ap_ssid     = "esp8266";
+const char* ap_password = "esp826612345";
 ```
 
 You need that Access Point Credential (you can change it) to connect for the first time before you can configure the wifi connection. 

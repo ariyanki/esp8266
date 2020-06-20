@@ -10,8 +10,8 @@ Servo servo;
 
 // #### Network Configuration ####
 // Access Point network credentials
-const char* ap_ssid     = "nodemcu";
-const char* ap_password = "nodemcu12345";
+const char* ap_ssid     = "esp82662";
+const char* ap_password = "esp826612345";
 
 // Set web server port number to 80
 ESP8266WebServer server(80);
