@@ -1,6 +1,6 @@
 # ESP8266 Code Collection
 
-I use ESP-01 and NodeMCU V2 to play with.
+I use ESP-01 and NodeMCU V2 for this project.
 
 Use **Arduino IDE** to program, search how to program esp8266 with Arduino IDE on google.
 
