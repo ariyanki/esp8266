@@ -19,7 +19,7 @@ Search how to program esp8266 with Arduino IDE on google.
 
 #### ESP-01
 
-It has 2 GPIO pin.
+It has 4 GPIO pin.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/esp-01-pinout.png" width="300">
