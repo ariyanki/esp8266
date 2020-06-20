@@ -17,28 +17,28 @@ After you connect to that Access point, go to **http://192.168.4.1** (default AP
 
 **Homepage**
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ariyanki/nodemcu-iot/master/Docs/image/feeding_timer/home.png" width="250" title="hover text">
+  <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/feeding_timer/home.png" width="250" title="hover text">
 </p>
 
 
 **Wifi Config**
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ariyanki/nodemcu-iot/master/Docs/image/feeding_timer/wifi-config.png" width="250" title="hover text">
+  <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/feeding_timer/wifi-config.png" width="250" title="hover text">
 </p>
 
 **Saved Notification**
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ariyanki/nodemcu-iot/master/Docs/image/feeding_timer/saved-notif.png" width="250" title="hover text">
+  <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/feeding_timer/saved-notif.png" width="250" title="hover text">
 </p>
 
 **Servo Config**
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ariyanki/nodemcu-iot/master/Docs/image/feeding_timer/servo-config.png" width="250" title="hover text">
+  <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/feeding_timer/servo-config.png" width="250" title="hover text">
 </p>
 
 **Timer Config**
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ariyanki/nodemcu-iot/master/Docs/image/feeding_timer/timer-config.png" width="250" title="hover text">
+  <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/feeding_timer/timer-config.png" width="250" title="hover text">
 </p>
 
 To change number of timer, modify this code:
