@@ -17,23 +17,23 @@ After you connect to that Access point, go to **http://192.168.4.1** (default AP
 
 **Homepage**
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ariyanki/nodemcu-iot/master/Docs/image/smart_plug/home.png" width="250" title="hover text">
+  <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/smart_plug/home.png" width="250" title="hover text">
 </p>
 
 
 **Wifi Config**
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ariyanki/nodemcu-iot/master/Docs/image/smart_plug/wifi-config.png" width="250" title="hover text">
+  <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/smart_plug/wifi-config.png" width="250" title="hover text">
 </p>
 
 **Saved Notification**
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ariyanki/nodemcu-iot/master/Docs/image/smart_plug/saved-notif.png" width="250" title="hover text">
+  <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/smart_plug/saved-notif.png" width="250" title="hover text">
 </p>
 
 **Plug GPIO Config**
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ariyanki/nodemcu-iot/master/Docs/image/smart_plug/plug-config.png" width="250" title="hover text">
+  <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/smart_plug/plug-config.png" width="250" title="hover text">
 </p>
 To set number of Plug or Relay Mode (Normally Open/Normally Close), modify this code:
 
@@ -45,7 +45,7 @@ To set number of Plug or Relay Mode (Normally Open/Normally Close), modify this 
 
 **Timer Config**
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ariyanki/nodemcu-iot/master/Docs/image/smart_plug/timer-config.png" width="250" title="hover text">
+  <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/smart_plug/timer-config.png" width="250" title="hover text">
 </p>
 
 To change number of timer, modify this code:
