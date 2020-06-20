@@ -139,7 +139,7 @@ void handleRoot() {
   int currentYear = ptm->tm_year+1900;
   String currentDate = String(monthDay) + " " + String(currentMonthName) + " " + String(currentYear);
   
-  String htmlRes  = headerHtml + "<body><h1>Smart Feeding</h1>"
+  String htmlRes  = headerHtml + "<body><h1>Smart Feeder</h1>"
     "<p>"+String(daysOfTheWeek[timeClient.getDay()])+", "+currentDate+" "+timeClient.getFormattedTime()+"</p>"
     "<p>To make this timer work, please make sure wifi configuration connected to internet because it is connected to NTP Server.</p>"
     "<p>If the datetime above correct then your wifi configuration is correct.</p>"

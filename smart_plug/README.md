@@ -1,9 +1,9 @@
 # Smart Plug
 
-I made this code to control my electric plugs
+I made this sketch to control my electric plugs
 
 
-For the first time, before you upload your code to the board, please see this configuration:
+For the first time, before you upload your sketch to the board, please see this configuration:
 
 ```
 // Access Point network credentials
@@ -35,7 +35,7 @@ After you connect to that Access point, go to **http://192.168.4.1** (default AP
 <p align="center">
   <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/smart_plug/plug-config.png" width="250" title="hover text">
 </p>
-To set number of Plug or Relay Mode (Normally Open/Normally Close), modify this code:
+To set number of Plug or Relay Mode (Normally Open/Normally Close), modify this sketch:
 
 ```
 // #### Relay Configuration ####
@@ -48,7 +48,7 @@ To set number of Plug or Relay Mode (Normally Open/Normally Close), modify this 
   <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/smart_plug/timer-config.png" width="250" title="hover text">
 </p>
 
-To change number of timer, modify this code:
+To change number of timer, modify this sketch:
 ```
 // #### Feeding Timer Configuration ####
 #define TIMER_LIMIT 24
