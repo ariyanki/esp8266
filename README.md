@@ -13,7 +13,7 @@ Search how to program esp8266 with Arduino IDE on google.
 
 **Arduino IDE Board Setting**
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/board-setting.png" width="250">
+  <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/board-setting.png" width="300">
 </p>
 
 
@@ -22,13 +22,13 @@ Search how to program esp8266 with Arduino IDE on google.
 It has 2 GPIO pin.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/esp-01-pinout.png" width="250">
+  <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/esp-01-pinout.png" width="300">
 </p>
 
 you will need **FTDI USB to TTL Serial Board** to connect your ESP-01 to PC.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/esp-01-ftdi.jpg" width="250">
+  <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/esp-01-ftdi.jpg" width="500">
 </p>
 
 After you upload the sketch, pull out GPIO-0 and reboot.
@@ -38,6 +38,6 @@ After you upload the sketch, pull out GPIO-0 and reboot.
 It has 17 GPIO pin.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/nodemcu-pinout.png" width="250">
+  <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/nodemcu-pinout.png" width="400">
 </p>
 
