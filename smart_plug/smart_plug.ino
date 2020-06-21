@@ -7,7 +7,7 @@
 
 // #### Network Configuration ####
 // Access Point network credentials
-const char* ap_ssid     = "esp8266";
+const char* ap_ssid     = "esp8266plug";
 const char* ap_password = "esp826612345";
 
 // Set web server port number to 80
@@ -23,7 +23,7 @@ NTPClient timeClient(ntpUDP, "id.pool.ntp.org", (7*3600));
 
 // #### Relay Configuration ####
 #define RELAY_NO    true
-#define NUM_RELAYS 4 // this number impact to eeprom size max 4096, for 24 times setting, each time 9 char *24 * num relays 
+#define NUM_RELAYS 6 // this number impact to eeprom size max 4096, for 24 times setting, each time 9 char *24 * num relays 
 
 // #### Feeding Timer Configuration ####
 #define TIMER_LIMIT 24 // for 24 times setting, each time 9 char *24
@@ -54,17 +54,21 @@ int eepromSize=timeOffAddr+(NUM_RELAYS*timeLength);
 
 
 void eeprom_write(String buffer, int addr, int length) {
-  int bufferLength = buffer.length();
-  EEPROM.begin(eepromSize);
-  delay(10);
-  for (int L = addr; L < addr+bufferLength; ++L) {
-    EEPROM.write(L, buffer[L-addr]);
+  String curVal = eeprom_read(addr, length);
+  // Check before write to minimize eeprom write operation
+  if(curVal!=buffer){
+    int bufferLength = buffer.length();
+    EEPROM.begin(eepromSize);
+    delay(10);
+    for (int L = addr; L < addr+bufferLength; ++L) {
+      EEPROM.write(L, buffer[L-addr]);
+    }
+    //set empty 
+    for (int L = addr+bufferLength; L < addr+length; ++L) {
+      EEPROM.write(L, 255);
+    }
+    EEPROM.commit();
   }
-  //set empty 
-  for (int L = addr+bufferLength; L < addr+length; ++L) {
-    EEPROM.write(L, 255);
-  }
-  EEPROM.commit();
 }
 
 String eeprom_read(int addr, int length) {
@@ -79,9 +83,13 @@ String eeprom_read(int addr, int length) {
 }
 
 void eeprom_write_single(int value, int addr) {
-  EEPROM.begin(eepromSize);
-  EEPROM.write(addr, value);
-  EEPROM.commit();
+  int curVal = eeprom_read_single(addr);
+  // Check before write to minimize eeprom write operation
+  if(curVal!=value){
+    EEPROM.begin(eepromSize);
+    EEPROM.write(addr, value);
+    EEPROM.commit();
+  }
 }
 
 int eeprom_read_single(int addr) {
@@ -327,6 +335,14 @@ void setup() {
 //    eeprom_write("255.255.255.0", ipSubnetAddr,ipLength);
 //    eeprom_write("192.168.1.1", ipGatewayAddr,ipLength);
 //    eeprom_write("192.168.1.1", ipDNSAddr,ipLength);
+
+//  in case something wrong,  depend on NUM_RELAYS
+// eeprom_write_single(255, gpioAddr);
+// eeprom_write_single(255, gpioAddr+1);
+// eeprom_write_single(255, gpioAddr+2);
+// eeprom_write_single(255, gpioAddr+3);
+// eeprom_write_single(255, gpioAddr+4);
+// eeprom_write_single(255, gpioAddr+5);
 
   // GET Wifi Config from EEPROM
   String ssid = eeprom_read(ssidAddr, ssidLength);

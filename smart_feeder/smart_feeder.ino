@@ -10,7 +10,7 @@ Servo servo;
 
 // #### Network Configuration ####
 // Access Point network credentials
-const char* ap_ssid     = "esp82662";
+const char* ap_ssid     = "esp8266Feeder";
 const char* ap_password = "esp826612345";
 
 // Set web server port number to 80
@@ -47,22 +47,26 @@ int ipDNSAddr = ipGatewayAddr+ipLength;
 int gpioAddr = ipDNSAddr+ipLength;
 int servoWriteFromAddr = gpioAddr+singleLength;
 int servoWriteToAddr = servoWriteFromAddr+singleLength;
-int timeAddr = servoWriteFromAddr+singleLength;
+int timeAddr = servoWriteToAddr+singleLength;
 
 int eepromSize=timeAddr+timeLength;
 
 void eeprom_write(String buffer, int addr, int length) {
-  int bufferLength = buffer.length();
-  EEPROM.begin(eepromSize);
-  delay(10);
-  for (int L = addr; L < addr+bufferLength; ++L) {
-    EEPROM.write(L, buffer[L-addr]);
+  String curVal = eeprom_read(addr, length);
+  // Check before write to minimize eeprom write operation
+  if(curVal!=buffer){
+    int bufferLength = buffer.length();
+    EEPROM.begin(eepromSize);
+    delay(10);
+    for (int L = addr; L < addr+bufferLength; ++L) {
+      EEPROM.write(L, buffer[L-addr]);
+    }
+    //set empty 
+    for (int L = addr+bufferLength; L < addr+length; ++L) {
+      EEPROM.write(L, 255);
+    }
+    EEPROM.commit();
   }
-  //set empty 
-  for (int L = addr+bufferLength; L < addr+length; ++L) {
-    EEPROM.write(L, 255);
-  }
-  EEPROM.commit();
 }
 
 String eeprom_read(int addr, int length) {
@@ -77,9 +81,13 @@ String eeprom_read(int addr, int length) {
 }
 
 void eeprom_write_single(int value, int addr) {
-  EEPROM.begin(eepromSize);
-  EEPROM.write(addr, value);
-  EEPROM.commit();
+  int curVal = eeprom_read_single(addr);
+  // Check before write to minimize eeprom write operation
+  if(curVal!=value){
+    EEPROM.begin(eepromSize);
+    EEPROM.write(addr, value);
+    EEPROM.commit();
+  }
 }
 
 int eeprom_read_single(int addr) {
