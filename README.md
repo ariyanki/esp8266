@@ -19,8 +19,6 @@ Search on google How to [Install ESP8266 in Arduino IDE (Windows, Mac OS X, Linu
 
 ## ESP-01
 
-It has 4 GPIO pin.
-
 <p align="center">
   <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/esp-01-pinout.png" width="300">
 </p>
@@ -34,8 +32,6 @@ you will need **FTDI USB to TTL Serial Board** to connect your ESP-01 to PC.
 After you upload the sketch, pull out GPIO-0 and reboot.
 
 ## Nodemcu V2
-
-It has 17 GPIO pin.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/ariyanki/esp8266/master/Docs/image/nodemcu-pinout.png" width="400">
