@@ -155,7 +155,11 @@ void handleRoot() {
     "<p><a href=\"/servoconfig\"><button class=\"button button2\">Servo Config</button></a></p>"
     "<p><a href=\"/timerconfig\"><button class=\"button button2\">Timer Config</button></a></p>"
     "<p></p>"
-    "<p><a href=\"/feeding\"><button class=\"button button2\">Feeding Test</button></a></p>"
+    "<p><button class=\"button button2\" onclick=\"testFeed()\">Feeding Test</button></p>"
+    "<script>function testFeed() {"
+    "var xhr = new XMLHttpRequest();"
+    "xhr.open(\"GET\", \"/feeding\", true);"
+    "}</script>"
     "</body>"+footerHtml;
             
   server.send(200, "text/html", htmlRes);
