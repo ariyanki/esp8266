@@ -7,6 +7,8 @@
 #include <EEPROM.h>
 
 Servo servo;
+int servoFrom = 0;
+int servoTo = 0;
 
 // #### Network Configuration ####
 // Access Point network credentials
@@ -20,6 +22,7 @@ ESP8266WebServer server(80);
 // #### NTP Configuration ####
 char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 String months[12]={"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
+int usentptime = 0;
 
 // Define NTP Client to get time
 WiFiUDP ntpUDP;
@@ -44,7 +47,8 @@ int ipAddr = pwdAddr+pwdLength;
 int ipSubnetAddr = ipAddr+ipLength;
 int ipGatewayAddr = ipSubnetAddr+ipLength;
 int ipDNSAddr = ipGatewayAddr+ipLength;
-int gpioAddr = ipDNSAddr+ipLength;
+int useNTPTimeAddr = ipDNSAddr+ipLength;
+int gpioAddr = useNTPTimeAddr+singleLength;
 int servoWriteFromAddr = gpioAddr+singleLength;
 int servoWriteToAddr = servoWriteFromAddr+singleLength;
 int timeAddr = servoWriteToAddr+singleLength;
@@ -147,18 +151,24 @@ void handleRoot() {
   int currentYear = ptm->tm_year+1900;
   String currentDate = String(monthDay) + " " + String(currentMonthName) + " " + String(currentYear);
   
+  String usentp = "";
+  if(usentptime==1){
+    usentp = "<p><a href=\"/timerconfig\"><button class=\"button button2\">Timer Config</button></a></p>";
+  }
+  
   String htmlRes  = headerHtml + "<body><h1>Smart Feeder</h1>"
     "<p>"+String(daysOfTheWeek[timeClient.getDay()])+", "+currentDate+" "+timeClient.getFormattedTime()+"</p>"
     "<p>To make this timer work, please make sure wifi configuration connected to internet because it is connected to NTP Server.</p>"
     "<p>If the datetime above correct then your wifi configuration is correct.</p>"
     "<p><a href=\"/wificonfig\"><button class=\"button button2\">Wifi Config</button></a></p>"
     "<p><a href=\"/servoconfig\"><button class=\"button button2\">Servo Config</button></a></p>"
-    "<p><a href=\"/timerconfig\"><button class=\"button button2\">Timer Config</button></a></p>"
+    ""+usentp+""
     "<p></p>"
     "<p><button class=\"button button2\" onclick=\"testFeed()\">Feeding Test</button></p>"
     "<script>function testFeed() {"
     "var xhr = new XMLHttpRequest();"
     "xhr.open(\"GET\", \"/feeding\", true);"
+    "xhr.send();"
     "}</script>"
     "</body>"+footerHtml;
             
@@ -167,8 +177,7 @@ void handleRoot() {
 
 void handleFeeding() {
   servoWrite();
-    
-  server.send(200, "text/html", redirectToRootHtml);
+  server.send(200, "text/plain", "OK");
 }
 
 void handleWifiConfigForm() {
@@ -178,11 +187,18 @@ void handleWifiConfigForm() {
   String strSubnet = eeprom_read(ipSubnetAddr, ipLength);
   String strGateway = eeprom_read(ipGatewayAddr, ipLength);
   String strDNS = eeprom_read(ipDNSAddr, ipLength);
+  int usentp = eeprom_read_single(useNTPTimeAddr);
+  
+  String usentpcheck = "";
+  if(usentp==1){
+    usentpcheck = "checked";
+  }
   
   String htmlRes  = headerHtml + "<body><h1>Wifi Config</h1>"
     "<form method=post action=\"/savewificonfig\">"
     "<p><b>SSID</b><br/><input type=text name=ssid id=ssid value=\""+ssid+"\"><br/>(max 32 character)</p>"
     "<p><b>Password</b><br/><input type=text name=password id=password value=\""+password+"\"><br/>(max 32 character)</p>"
+    "<p><b>Use Network Time?</b><br/><input type=checkbox name=usentptime id=usentptime "+usentpcheck+" value=\"1\"> Yes <br/>(if No then timer will not working, you can trigger from another device with http trigger \"http://&lt;ipaddress&gt;/feeding\" )</p>"
     "<p>Manual Setting IP<br/>(leave empty if you want to use DHCP)</p>"
     "<p><b>IP Address</b><br/><input type=text name=ip id=ip value=\""+strIp+"\"></p>"
     "<p><b>Subnet</b><br/><input type=text name=subnet id=subnet value=\""+strSubnet+"\"></p>"
@@ -196,12 +212,14 @@ void handleWifiConfigForm() {
 }
 
 void handleSaveWifiConfigForm() {
+  Serial.println(server.arg("usentptime").toInt());
   eeprom_write(server.arg("ssid"), ssidAddr,ssidLength);
   eeprom_write(server.arg("password"), pwdAddr,pwdLength);
   eeprom_write(server.arg("ip"), ipAddr,ipLength);
   eeprom_write(server.arg("subnet"), ipSubnetAddr,ipLength);
   eeprom_write(server.arg("gateway"), ipGatewayAddr,ipLength);
   eeprom_write(server.arg("dns"), ipDNSAddr,ipLength);
+  eeprom_write_single(server.arg("usentptime").toInt(), useNTPTimeAddr);
   
   server.send(200, "text/html", savedNotifHtml);
 }
@@ -256,25 +274,28 @@ void handleSaveTimerConfigForm() {
 }
 
 void servoWrite() {
-  servo.write(eeprom_read_single(servoWriteToAddr));
+  // Total delay must be more than 1000 milisecond when using timer
+  servo.write(servoTo);
   delay(500);
-  servo.write(eeprom_read_single(servoWriteFromAddr));
-  delay(1000);
+  servo.write(servoFrom);
+  delay(2000);
 }
 
 void setup() {
   Serial.begin(115200);
   delay(100);
   // Initialize servo pin
-  servo.attach(eeprom_read_single(gpioAddr));// D1
-  servo.write(0);
+  servo.attach(eeprom_read_single(gpioAddr));
+  servoFrom = eeprom_read_single(servoWriteFromAddr);
+  servoTo = eeprom_read_single(servoWriteToAddr);
+  servo.write(servoFrom);
 
   // Initialize Access Point
   WiFi.softAP(ap_ssid, ap_password);
   Serial.print("visit: \n"); 
   Serial.println(WiFi.softAPIP());
 
-  //  in case want to try write manually
+//      in case want to try write manually
 //    eeprom_write("ssid", ssidAddr,ssidLength);
 //    eeprom_write("password", pwdAddr,pwdLength);
 //    eeprom_write("192.168.1.113", ipAddr,ipLength);
@@ -348,7 +369,10 @@ void setup() {
 
   readTimer();
 
-  timeClient.begin();
+  usentptime = eeprom_read_single(useNTPTimeAddr);
+  if(usentptime==1){
+    timeClient.begin();
+  }
   
   // start web server
   server.on("/", handleRoot);
@@ -365,13 +389,13 @@ void setup() {
 
 void loop(){
   server.handleClient();
-  // Set delay to update the time
-  delay(500);
-  timeClient.update();
-  String checkTime = String(timeClient.getHours())+":"+String(timeClient.getMinutes())+":"+String(timeClient.getSeconds());
-  for (int i=0;i<TIMER_LIMIT;i++){
-    if (timer[i] == checkTime) {
-      servoWrite();
+  if(usentptime==1){
+    timeClient.update();
+    String checkTime = String(timeClient.getHours())+":"+String(timeClient.getMinutes())+":"+String(timeClient.getSeconds());
+    for (int i=0;i<TIMER_LIMIT;i++){
+      if (timer[i] == checkTime) {
+        servoWrite();
+      }
     }
   }
 }
