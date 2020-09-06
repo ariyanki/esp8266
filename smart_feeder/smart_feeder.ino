@@ -15,7 +15,7 @@ int servoTo = 0;
 // Access Point network credentials
 const char* ap_ssid     = "esp8266Feeder";
 const char* ap_password = "esp826612345";
-bool wifiStatus = false;
+bool wifiConnected = false;
 
 // Set web server port number to 80
 ESP8266WebServer server(80);
@@ -313,10 +313,6 @@ void connectToWifi(){
     if(i>20) {
       Serial.println("WiFi not connected. Please use \""+String(ap_ssid)+"\" AP to config");
     }else{
-      wifiStatus = true;
-      timeClient.begin();
-      syncTime();
-      
       //Set Static IP
       String strIp = eeprom_read(ipAddr, ipLength);
       Serial.println(strIp);
@@ -351,6 +347,10 @@ void connectToWifi(){
         }
       }
       Serial.println("WiFi connected.");
+      
+      wifiConnected = true;
+      timeClient.begin();
+      syncTime();
     }
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
@@ -358,7 +358,7 @@ void connectToWifi(){
 }
 
 void syncTime(){
-  if (wifiStatus){
+  if (wifiConnected){
     timeClient.update();
     seconds = timeClient.getSeconds();
     minutes = timeClient.getMinutes();
@@ -469,7 +469,7 @@ void loop(){
   if (millis() >= lastMilis+1000){
     lastMilis=millis();
     
-    if (seconds == 30 and !wifiStatus){
+    if (seconds == 30 and !wifiConnected){
       connectToWifi();
     }
     // Sync to NTP
