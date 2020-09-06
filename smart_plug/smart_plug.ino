@@ -4,11 +4,15 @@
 #include <WiFiUdp.h>
 #include <ESP8266WebServer.h>
 #include <EEPROM.h>
+#include <ArduinoOTA.h>
+
+#define NUM_RELAYS 2 // this number impact to eeprom size max 4096, for 24 times setting, each time 9 char *24 * num relays 
 
 // #### Network Configuration ####
 // Access Point network credentials
-const char* ap_ssid     = "esp8266plug";
+const char* ap_ssid     = "saklarkanya";
 const char* ap_password = "esp826612345";
+bool wifiStatus = false;
 
 // Set web server port number to 80
 ESP8266WebServer server(80);
@@ -21,9 +25,19 @@ String months[12]={"January", "February", "March", "April", "May", "June", "July
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "id.pool.ntp.org", (7*3600));
 
+// #### Time ####
+unsigned long timeNow = 0;
+unsigned long timeLast = 0;
+int startingHour = 0;
+int seconds = 0;
+int minutes = 0;
+int hours = startingHour;
+String currentDate = "";
+String currentDay = "";
+
+
 // #### Relay Configuration ####
 #define RELAY_NO    true
-#define NUM_RELAYS 6 // this number impact to eeprom size max 4096, for 24 times setting, each time 9 char *24 * num relays 
 
 // #### Feeding Timer Configuration ####
 #define TIMER_LIMIT 24 // for 24 times setting, each time 9 char *24
@@ -36,7 +50,7 @@ int singleLength = 1;
 int ssidLength = 32; 
 int pwdLength = 32;
 int ipLength=15;
-int gpioLength=NUM_RELAYS;
+int gpioLength=2*NUM_RELAYS;
 int timeLength=9*TIMER_LIMIT;
 
 // Address Position setting
@@ -128,6 +142,7 @@ String redirectToRootHtml  = "<!DOCTYPE html><html>"
 
 String savedNotifHtml  = headerHtml + "<body><br/><br/>"
     "<p>Your configuration has been saved, if you are sure with your configuration then please restart your device</p>"
+    "<p><a href=\"#\"><button class=\"button button2\" onclick=\"restart()\">Restart</button></a></p>"
     "<p><a href=\"/\"><button class=\"button button2\">Back to home</button></a></p>"
     "</body>"+footerHtml;
 
@@ -153,33 +168,36 @@ String relayState(int relayno){
 
 void handleRoot() {
   String buttons ="";
+  int j = 0;
   for(int i=0; i<NUM_RELAYS; i++){
-    buttons+= "<h4>Plug #" + String(i+1) + " - GPIO " + eeprom_read_single(gpioAddr+i) + "</h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"" + String(i) + "\" "+ relayState(i) +"><span class=\"slider\"></span></label>";
+    buttons+= "<h4>Plug #" + String(i+1) + " - GPIO " + eeprom_read_single(gpioAddr+j) + "</h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"" + String(j) + "\" "+ relayState(j) +"><span class=\"slider\"></span></label>";
+    j = j + 2;
   }
   
-  timeClient.update();
-  unsigned long epochTime = timeClient.getEpochTime();
-  struct tm *ptm = gmtime ((time_t *)&epochTime);
-  int monthDay = ptm->tm_mday;
-  int currentMonth = ptm->tm_mon+1;
-  String currentMonthName = months[currentMonth-1];
-  int currentYear = ptm->tm_year+1900;
-  String currentDate = String(monthDay) + " " + String(currentMonthName) + " " + String(currentYear);
+  syncTime();
   
   String htmlRes  = headerHtml + "<body><h1>Smart Plug</h1>"
-    "<p>"+String(daysOfTheWeek[timeClient.getDay()])+", "+currentDate+" "+timeClient.getFormattedTime()+"</p>"
+    "<p>"+currentDay+", "+currentDate+" "+hours+":"+minutes+":"+seconds+"</p>"
     "<p>To make this timer work, please make sure wifi configuration connected to internet because it is connected to NTP Server.</p>"
     "<p>If the datetime above correct then your wifi configuration is correct.</p>"
     "<p><a href=\"/wificonfig\"><button class=\"button button2\">Wifi Config</button></a></p>"
     "<p><a href=\"/gpioconfig\"><button class=\"button button2\">Plug GPIO Config</button></a></p>"
     "<p><a href=\"/timerconfig\"><button class=\"button button2\">Timer Config</button></a></p>"
+    "<p><a href=\"#\"><button class=\"button button2\" onclick=\"restart()\">Restart</button></a></p>"
     "<p>"+buttons+"</p>"
-    "<script>function toggleCheckbox(element) {"
+    "<script>"
+    "function toggleCheckbox(element) {"
     "var xhr = new XMLHttpRequest();"
     "if(element.checked){ xhr.open(\"GET\", \"/updaterelay?relay=\"+element.id+\"&state=1\", true); }"
     "else { xhr.open(\"GET\", \"/updaterelay?relay=\"+element.id+\"&state=0\", true); }"
     "xhr.send();"
-    "}</script>"
+    "}"
+    "function restart(element) {"
+    "var xhr = new XMLHttpRequest();"
+    "xhr.open(\"GET\", \"/restart\", true);"
+    "xhr.send();"
+    "}"
+    "</script>"
     "</body>"+footerHtml;
             
   server.send(200, "text/html", htmlRes);
@@ -222,8 +240,15 @@ void handleSaveWifiConfigForm() {
 
 void handleGPIOConfigForm() {
   String inputForm="";
+  int j = 0;
   for(int i=0; i<NUM_RELAYS; i++){
-    inputForm += "<p><b>Plug #"+String(i+1)+" GPIO Number</b></br><input type=text name=gpio"+i+" id=gpio"+i+" value=\""+eeprom_read_single(gpioAddr+i)+"\"></p>";
+    String defaultStateCheck = "";
+    if(eeprom_read_single(gpioAddr+j+1)==1){
+      defaultStateCheck = "checked";
+    }
+    inputForm += "<p><b>Plug #"+String(i+1)+" GPIO Number</b></br><input type=text name=gpio"+j+" id=gpio"+i+" value=\""+eeprom_read_single(gpioAddr+j)+"\"></p>"
+    "<p><b>Default State</b> <input type=checkbox name=defaultstate"+(j+1)+" id=defaultstate"+(j+1)+" "+defaultStateCheck+" value=\"1\"> On </p>";
+    j = j + 2;
   }
   
   String htmlRes  = headerHtml + "<body><h1>Plug GPIO Config</h1>"
@@ -236,8 +261,11 @@ void handleGPIOConfigForm() {
 }
 
 void handleSaveGPIOConfigForm() {
+  int j = 0;
   for(int i=0; i<NUM_RELAYS; i++){
-    eeprom_write_single(server.arg("gpio"+String(i)).toInt(), gpioAddr+i);
+    eeprom_write_single(server.arg("gpio"+String(j)).toInt(), gpioAddr+j);
+    eeprom_write_single(server.arg("defaultstate"+String(j+1)).toInt(), gpioAddr+j+1);
+    j = j + 2;
   }
   
   server.send(200, "text/html", savedNotifHtml);
@@ -280,6 +308,10 @@ void handleUpdateRelay() {
   updateRelay(server.arg("relay").toInt(),server.arg("state").toInt());
   
   server.send(200, "text/plain", "OK");
+}
+
+void handleRestart() {
+  ESP.restart();
 }
 
 void updateRelay(int relayno, int relaystate){
@@ -344,6 +376,66 @@ void setup() {
 // eeprom_write_single(255, gpioAddr+4);
 // eeprom_write_single(255, gpioAddr+5);
 
+  connectToWifi();
+
+  // Initialize PIN
+  int j = 0;
+  for(int i=0; i<NUM_RELAYS; i++){
+    pinMode(eeprom_read_single(gpioAddr+j), OUTPUT);
+    int defaultState = eeprom_read_single(gpioAddr+j+1);
+    if(RELAY_NO){
+      if (defaultState == 1){
+        digitalWrite(eeprom_read_single(gpioAddr+j), HIGH);
+      }else{
+        digitalWrite(eeprom_read_single(gpioAddr+j), LOW);
+      }
+    }
+    else{
+      if (defaultState == 1){
+        digitalWrite(eeprom_read_single(gpioAddr+j), LOW);
+      }else{
+        digitalWrite(eeprom_read_single(gpioAddr+j), HIGH);
+      }
+    }
+    j = j + 2;
+  }
+
+  readTimer();
+  
+  // start web server
+  server.on("/", handleRoot);
+  server.on("/wificonfig", handleWifiConfigForm);
+  server.on("/savewificonfig", HTTP_POST, handleSaveWifiConfigForm);
+  server.on("/gpioconfig", handleGPIOConfigForm);
+  server.on("/savegpioconfig", HTTP_POST, handleSaveGPIOConfigForm);
+  server.on("/timerconfig", handleTimerConfigForm);
+  server.on("/savetimerconfig", HTTP_POST, handleSaveTimerConfigForm);
+  server.on("/updaterelay", HTTP_GET, handleUpdateRelay);
+  server.on("/restart", HTTP_GET, handleRestart);
+  server.begin();
+
+  ArduinoOTA.onStart([]() {
+    Serial.println("Start");
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nEnd");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+    else if (error == OTA_END_ERROR) Serial.println("End Failed");
+  });
+  ArduinoOTA.begin();
+  
+}
+
+void connectToWifi(){
   // GET Wifi Config from EEPROM
   String ssid = eeprom_read(ssidAddr, ssidLength);
   Serial.println("EEPROM "+String(eepromSize)+" Config:");
@@ -368,6 +460,10 @@ void setup() {
     if(i>20) {
       Serial.println("WiFi not connected. Please use \""+String(ap_ssid)+"\" AP to config");
     }else{
+      wifiStatus = true;
+      timeClient.begin();
+      syncTime();
+      
       //Set Static IP
       String strIp = eeprom_read(ipAddr, ipLength);
       Serial.println(strIp);
@@ -406,44 +502,20 @@ void setup() {
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
   }
-
-
-  // Initialize PIN
-  for(int i=0; i<NUM_RELAYS; i++){
-    pinMode(eeprom_read_single(gpioAddr+i), OUTPUT);
-    if(RELAY_NO){
-      digitalWrite(eeprom_read_single(gpioAddr+i), HIGH);
-    }
-    else{
-      digitalWrite(eeprom_read_single(gpioAddr+i), LOW);
-    }
-  }
-
-  readTimer();
-  
-  timeClient.begin();
-  
-  // start web server
-  server.on("/", handleRoot);
-  server.on("/wificonfig", handleWifiConfigForm);
-  server.on("/savewificonfig", HTTP_POST, handleSaveWifiConfigForm);
-  server.on("/gpioconfig", handleGPIOConfigForm);
-  server.on("/savegpioconfig", HTTP_POST, handleSaveGPIOConfigForm);
-  server.on("/timerconfig", handleTimerConfigForm);
-  server.on("/savetimerconfig", HTTP_POST, handleSaveTimerConfigForm);
-  server.on("/updaterelay", HTTP_GET, handleUpdateRelay);
-  server.begin();
-  
 }
 
 void loop(){
+  updateTime();
+  if (seconds = 30 and !wifiStatus){
+    connectToWifi();
+  }
   server.handleClient();
-  // Set delay to update the time
-  delay(500);
-  timeClient.update();
-
+  // Sync to NTP
+  if (minutes == 30){
+      syncTime();
+  }
   // Execute Timer
-  String checkTime = String(timeClient.getHours())+":"+String(timeClient.getMinutes())+":"+String(timeClient.getSeconds());    
+  String checkTime = String(hours)+":"+String(minutes)+":"+String(seconds);    
   for(int i=0; i<NUM_RELAYS; i++){
     for (int j=0;j<TIMER_LIMIT;j++){
       if (timerOn[i][j] == checkTime) {
@@ -452,6 +524,48 @@ void loop(){
       if (timerOff[i][j] == checkTime) {
         updateRelay(i,0);
       }
+    }
+  }
+  
+  ArduinoOTA.handle();
+}
+
+void syncTime(){
+  timeClient.update();
+  seconds = timeClient.getSeconds();
+  minutes = timeClient.getMinutes();
+  hours = timeClient.getHours();
+  timeLast = millis();
+  
+  unsigned long epochTime = timeClient.getEpochTime();
+  struct tm *ptm = gmtime ((time_t *)&epochTime);
+  int monthDay = ptm->tm_mday;
+  int currentMonth = ptm->tm_mon+1;
+  String currentMonthName = months[currentMonth-1];
+  int currentYear = ptm->tm_year+1900;
+  
+  currentDay = String(daysOfTheWeek[timeClient.getDay()]);
+  currentDate = String(monthDay) + " " + String(currentMonthName) + " " + String(currentYear);
+}
+
+void updateTime(){
+  timeNow = millis();
+  if (timeNow >= timeLast+1000){
+    timeLast=timeNow;
+    seconds = seconds + 1;
+    
+    if (seconds == 60) {
+      seconds = 0;
+      minutes = minutes + 1;
+    }
+  
+    if (minutes == 60){ 
+      minutes = 0;
+      hours = hours + 1;
+    }
+  
+    if (hours == 24){
+      hours = 0;
     }
   }
 }
