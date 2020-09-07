@@ -13,7 +13,7 @@ int servoTo = 0;
 
 // #### Network Configuration ####
 // Access Point network credentials
-const char* ap_ssid     = "esp8266Feeder";
+const char* ap_ssid     = "esp2866feeder";
 const char* ap_password = "esp826612345";
 bool wifiConnected = false;
 
@@ -59,7 +59,7 @@ int ipAddr = pwdAddr+pwdLength;
 int ipSubnetAddr = ipAddr+ipLength;
 int ipGatewayAddr = ipSubnetAddr+ipLength;
 int ipDNSAddr = ipGatewayAddr+ipLength;
-int gpioAddr = ipDNSAddr+singleLength;
+int gpioAddr = ipDNSAddr+ipLength;
 int servoWriteFromAddr = gpioAddr+singleLength;
 int servoWriteToAddr = servoWriteFromAddr+singleLength;
 int timeAddr = servoWriteToAddr+singleLength;

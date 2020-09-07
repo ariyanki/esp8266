@@ -8,12 +8,12 @@
 
 
 #define RELAY_NO    false
-#define NUM_RELAYS 6 // this number impact to eeprom size max 4096, for 24 times setting, each time 9 char *24 * num relays 
+#define NUM_RELAYS 4 // this number impact to eeprom size max 4096, for 24 times setting, each time 9 char *24 * num relays 
 #define TIMER_LIMIT 24 // for 24 times setting, each time 9 char *24
 
 // #### Network Configuration ####
 // Access Point network credentials
-const char* ap_ssid     = "esp8266ssid";
+const char* ap_ssid     = "esp8266plug";
 const char* ap_password = "esp826612345";
 bool wifiConnected = false;
 
