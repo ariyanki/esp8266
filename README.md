@@ -1,6 +1,6 @@
 # ESP8266 Sketch Collection
 
-I use ESP-01 and NodeMCU V2 board for this project. I made this sketch to **easily configure wifi connection, gpio, and timer without re-upload the sketch**.
+I use ESP-01 and NodeMCU V2 board for this project. I made this sketch to **easily configure wifi connection, gpio, and timer without re-upload the sketch**, and also support **OTA (Over The Air) Update**.
 
 ## Arduino IDE
 
