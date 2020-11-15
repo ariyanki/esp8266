@@ -3,24 +3,22 @@
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 #include <ESP8266WebServer.h>
-#include <ESP8266mDNS.h>
 #include <EEPROM.h>
 #include <ArduinoOTA.h>
+#include <IRremoteESP8266.h>
+#include <IRsend.h>
 
-
-#define RELAY_NO    false
-#define NUM_RELAYS 1 // this number impact to eeprom size max 4096, for 24 times setting, each time 9 char *24 * num relays 
-#define TIMER_LIMIT 24 // for 24 times setting, each time 9 char *24
+IRsend irsend(0);
 
 // #### Network Configuration ####
 // Access Point network credentials
-const char* hostname     = "saklarlampubelakang";
-const char* ap_ssid     = "saklarlbelakang";
-const char* ap_password = "esp82661235";
+const char* ap_ssid     = "remotek1";
+const char* ap_password = "remote12345";
 bool wifiConnected = false;
 
 // Set web server port number to 80
 ESP8266WebServer server(80);
+
 
 // #### NTP Configuration ####
 char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
@@ -41,9 +39,9 @@ String currentDate = "";
 String currentDay = "";
 
 
-// #### Feeding Timer Configuration ####
-String timerOn[NUM_RELAYS][TIMER_LIMIT];
-String timerOff[NUM_RELAYS][TIMER_LIMIT];
+// #### Timer Configuration ####
+#define TIMER_LIMIT 24 // for 24 times setting, each time 9 char *24
+String timer[TIMER_LIMIT];
 
 // #### EEPROM to store Data ####
 // character length setting
@@ -51,7 +49,6 @@ int singleLength = 1;
 int ssidLength = 32; 
 int pwdLength = 32;
 int ipLength=15;
-int gpioLength=NUM_RELAYS;
 int timeLength=9*TIMER_LIMIT;
 
 // Address Position setting
@@ -62,12 +59,11 @@ int ipSubnetAddr = ipAddr+ipLength;
 int ipGatewayAddr = ipSubnetAddr+ipLength;
 int ipDNSAddr = ipGatewayAddr+ipLength;
 int gpioAddr = ipDNSAddr+ipLength;
-int gpioStateAddr = gpioAddr+gpioLength;
-int timeOnAddr = gpioStateAddr+gpioLength;
-int timeOffAddr = timeOnAddr+(NUM_RELAYS*timeLength);
+int servoWriteFromAddr = gpioAddr+singleLength;
+int servoWriteToAddr = servoWriteFromAddr+singleLength;
+int timeAddr = servoWriteToAddr+singleLength;
 
-int eepromSize=timeOffAddr+(NUM_RELAYS*timeLength);
-
+int eepromSize=timeAddr+timeLength;
 
 void eeprom_write(String buffer, int addr, int length) {
   String curVal = eeprom_read(addr, length);
@@ -113,8 +109,24 @@ int eeprom_read_single(int addr) {
   return EEPROM.read(addr);
 }
 
-// #### HTTP Configuration ####
 
+void readTimer(){
+  // GET timer for EEPROM
+  String strTime = eeprom_read(timeAddr, timeLength);
+  int f = 0, r=0;
+  for (int i=0; i < strTime.length(); i++)
+  { 
+   if(strTime.charAt(i) == ';') 
+    { 
+      timer[f] = strTime.substring(r, i); 
+      r=(i+1); 
+      f++;
+    }
+  }
+}
+
+// #### HTTP Configuration ####
+// Current time
 String logStr = "";
 
 String headerHtml = "<!DOCTYPE html><html>"
@@ -123,14 +135,7 @@ String headerHtml = "<!DOCTYPE html><html>"
   "<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}"
   ".button { background-color: #195B6A; border: none; color: white; padding: 16px 40px;"
   "text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer;}"
-  ".button2 {background-color: #77878A;}"
-  ".switch {position: relative; display: inline-block; width: 120px; height: 68px} "
-  ".switch input {display: none}"
-  ".slider {position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; border-radius: 34px}"
-  ".slider:before {position: absolute; content: \"\"; height: 52px; width: 52px; left: 8px; bottom: 8px; background-color: #fff; -webkit-transition: .4s; transition: .4s; border-radius: 68px}"
-  "input:checked+.slider {background-color: #2196F3}"
-  "input:checked+.slider:before {-webkit-transform: translateX(52px); -ms-transform: translateX(52px); transform: translateX(52px)}"
-  "</style></head>";
+  ".button2 {background-color: #77878A;}</style></head>";
 String footerHtml = "<html>";
 
 String redirectToRootHtml  = "<!DOCTYPE html><html>"
@@ -150,49 +155,23 @@ String savedNotifHtml  = headerHtml + "<body><br/><br/>"
     "</script>"
     "</body>"+footerHtml;
 
-String relayState(int relayno){
-  if(RELAY_NO){
-    if(digitalRead(eeprom_read_single(gpioAddr+relayno))){
-      return "checked";
-    }
-    else {
-      return "";
-    }
-  }
-  else {
-    if(digitalRead(eeprom_read_single(gpioAddr+relayno))){
-      return "";
-    }
-    else {
-      return "checked";
-    }
-  }
-  return "";
-}
-
 void handleRoot() {
-  String buttons ="";
-  for(int i=0; i<NUM_RELAYS; i++){
-    buttons+= "<h4>Plug #" + String(i+1) + " - GPIO " + eeprom_read_single(gpioAddr+i) + "</h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"" + String(i) + "\" "+ relayState(i) +"><span class=\"slider\"></span></label>";
-  }
-  
   syncTime();
   
-  String htmlRes  = headerHtml + "<body><h1>Smart Plug</h1>"
+  String htmlRes  = headerHtml + "<body><h1>Smart Feeder</h1>"
     "<p>"+currentDay+", "+currentDate+" "+hours+":"+minutes+":"+seconds+"</p>"
     "<p>To make this timer work, please make sure wifi configuration connected to internet because it is connected to NTP Server.</p>"
     "<p>If the datetime above correct then your wifi configuration is correct.</p>"
     "<p>"+logStr+"</p>"
     "<p><a href=\"/wificonfig\"><button class=\"button button2\">Wifi Config</button></a></p>"
-    "<p><a href=\"/gpioconfig\"><button class=\"button button2\">Plug GPIO Config</button></a></p>"
+    "<p><a href=\"/servoconfig\"><button class=\"button button2\">Servo Config</button></a></p>"
     "<p><a href=\"/timerconfig\"><button class=\"button button2\">Timer Config</button></a></p>"
     "<p><a href=\"#\"><button class=\"button button2\" onclick=\"restart()\">Restart</button></a></p>"
-    "<p>"+buttons+"</p>"
-    "<script>"
-    "function toggleCheckbox(element) {"
+    "<p></p>"
+    "<p><button class=\"button button2\" onclick=\"testFeed()\">Feeding Test</button></p>"
+    "<script>function testFeed() {"
     "var xhr = new XMLHttpRequest();"
-    "if(element.checked){ xhr.open(\"GET\", \"/updaterelay?relay=\"+element.id+\"&state=1\", true); }"
-    "else { xhr.open(\"GET\", \"/updaterelay?relay=\"+element.id+\"&state=0\", true); }"
+    "xhr.open(\"GET\", \"/feeding\", true);"
     "xhr.send();"
     "}"
     "function restart(element) {"
@@ -204,6 +183,17 @@ void handleRoot() {
     "</body>"+footerHtml;
             
   server.send(200, "text/html", htmlRes);
+}
+
+void handleFeeding() {
+  uint16_t irSignal[] = {4500, -4450, 600, -1650, 550, -1650, 600, -1650, 600, -500, 600, -500, 600, -550, 600, 
+  -500, 600, -500, 600, -1650, 550, -1650, 600, -1650, 600, -500, 600, -500, 650, -500, 550, -550, 600, -500, 600, 
+  -550, 550, -1650, 600, -500, 600, -550, 600, -500, 600, -500, 600, -550, 550, -550, 600, -1650, 550, -550, 600, -1600, 650, -1600, 600, -1650, 600, -1600, 600, -1650, 550, -1650, 600};
+
+//  uint16_t rawData[74] = {8950, -4350, 700, -1600, 650, -550, 650, -550, 650, -500, 700, -500, 700, -500, 700, -1600, 650, -550, 700, -1550, 700, -1600, 650, -550, 650, -1600, 700, -500, 700, -500, 750, -450, 700, -500, 650, -550, 650, -550, 650, -500, 700, -500, 700, -500, 700, -1600, 650, -550, 650, -500, 700, -500, 700, -500, 700, -500, 700, -500, 650, -1600, 700, -500, 700, -1600, 700, -500, 650, -550, 650, -1600, 700, -500, 700};
+  irsend.sendRaw(irSignal, sizeof(irSignal) / sizeof(irSignal[0]), 37.9);
+  
+  server.send(200, "text/plain", "OK");
 }
 
 void handleWifiConfigForm() {
@@ -241,19 +231,16 @@ void handleSaveWifiConfigForm() {
   server.send(200, "text/html", savedNotifHtml);
 }
 
-void handleGPIOConfigForm() {
-  String inputForm="";
-  for(int i=0; i<NUM_RELAYS; i++){
-    String defaultStateCheck = "";
-    if(eeprom_read_single(gpioStateAddr+i)==1){
-      defaultStateCheck = "checked";
-    }
-    inputForm += "<p><b>Plug #"+String(i+1)+" GPIO Number</b></br><input type=text name=gpio"+i+" id=gpio"+i+" value=\""+eeprom_read_single(gpioAddr+i)+"\"></p>"
-    "<p><b>Default State</b> <input type=checkbox name=defaultstate"+(i)+" id=defaultstate"+(i)+" "+defaultStateCheck+" value=\"1\"> On </p>";
-  }
+void handleServoConfigForm() {
+  String strGPIO = String(eeprom_read_single(gpioAddr));
+  String strWriteFrom = String(eeprom_read_single(servoWriteFromAddr));
+  String strWriteTo = String(eeprom_read_single(servoWriteToAddr));
   
-  String htmlRes  = headerHtml + "<body><h1>Plug GPIO Config</h1>"
-    "<form method=post action=\"/savegpioconfig\">"+inputForm+""
+  String htmlRes  = headerHtml + "<body><h1>Servo Config</h1>"
+    "<form method=post action=\"/saveservoconfig\">"
+    "<p><b>GPIO Number</b></br><input type=text name=gpio id=gpio value=\""+strGPIO+"\"></p>"
+    "<p><b>Write From</b></br><input type=text name=write_from id=write_from value=\""+strWriteFrom+"\"></p>"
+    "<p><b>Write To</b></br><input type=text name=write_to id=write_to value=\""+strWriteTo+"\"></p>"
     "<p><input type=submit value=Save> <input type=button value=Cancel onclick=\"window.location.href = '/';\"></p>"
     "</form>"
     "</body>"+footerHtml;
@@ -261,31 +248,24 @@ void handleGPIOConfigForm() {
   server.send(200, "text/html", htmlRes);
 }
 
-void handleSaveGPIOConfigForm() {
-  for(int i=0; i<NUM_RELAYS; i++){
-    eeprom_write_single(server.arg("gpio"+String(i)).toInt(), gpioAddr+i);
-    eeprom_write_single(server.arg("defaultstate"+String(i)).toInt(), gpioStateAddr+i);
-  }
+void handleSaveServoConfigForm() {
+  eeprom_write_single(server.arg("gpio").toInt(), gpioAddr);
+  eeprom_write_single(server.arg("write_from").toInt(), servoWriteFromAddr);
+  eeprom_write_single (server.arg("write_to").toInt(), servoWriteToAddr);
   
   server.send(200, "text/html", savedNotifHtml);
 }
 
-
 void handleTimerConfigForm() {
-  String inputForm="";
-  for(int i=0; i<NUM_RELAYS; i++){
-    String strTimerOn = eeprom_read(timeOnAddr+(i*timeLength), timeLength);
-    String strTimerOff = eeprom_read(timeOffAddr+(i*timeLength), timeLength);
-    inputForm += "<p><b>Timer Plug #"+String(i+1)+" On</b></br><input type=text name=gpioon"+i+" id=gpioon"+i+" value=\""+strTimerOn+"\"></p>";
-    inputForm += "<p><b>Timer Plug #"+String(i+1)+" Off</b></br><input type=text name=gpiooff"+i+" id=gpiooff"+i+" value=\""+strTimerOff+"\"></p>";
-  }
+  String strTimer = eeprom_read(timeAddr, timeLength);
   
   String htmlRes  = headerHtml + "<body><h1>Timer Config</h1>"
     "<form method=post action=\"/savetimerconfig\">"
     "<p>Format hour:minute:second without \"0\"<br/>"
     "For multiple time input with \";\" delimitier<br/>"
-    "To save memory it has each limit "+String(TIMER_LIMIT)+" times setting maximum<br/>"
-    "<b>Example:</b> 1:30:0;6:8:0;18:7:12</p>"+inputForm+""
+    "To save memory it has limit "+String(TIMER_LIMIT)+" times setting maximum<br/>"
+    "<b>Example:</b> 1:30:0;6:8:0;18:7:12</p>"
+    "<p><b>Timer</b></br><input type=text name=timer id=timer value=\""+strTimer+"\"></p>"
     "<p><input type=submit value=Save> <input type=button value=Cancel onclick=\"window.location.href = '/';\"></p>"
     "</form>"
     "</body>"+footerHtml;
@@ -294,60 +274,14 @@ void handleTimerConfigForm() {
 }
 
 void handleSaveTimerConfigForm() {
-  for(int i=0; i<NUM_RELAYS; i++){
-    eeprom_write(server.arg("gpioon"+String(i)), timeOnAddr+(i*timeLength),timeLength);
-    eeprom_write(server.arg("gpiooff"+String(i)), timeOffAddr+(i*timeLength),timeLength);
-  }
+  eeprom_write(server.arg("timer"), timeAddr,timeLength);
   readTimer();
   
   server.send(200, "text/html", redirectToRootHtml);
 }
 
-void handleUpdateRelay() {
-  updateRelay(server.arg("relay").toInt(),server.arg("state").toInt());
-  
-  server.send(200, "text/plain", "OK");
-}
-
 void handleRestart() {
   ESP.restart();
-}
-
-void updateRelay(int relayno, int relaystate){
-  if(RELAY_NO){
-    digitalWrite(eeprom_read_single(gpioAddr+relayno), relaystate);
-  }
-  else{
-    digitalWrite(eeprom_read_single(gpioAddr+relayno), !relaystate);
-  }
-}
-
-void readTimer(){
-  // GET timer for EEPROM
-  for(int i=0; i<NUM_RELAYS; i++){
-    String strTime = eeprom_read(timeOnAddr+(i*timeLength), timeLength);
-    int f = 0, r=0;
-    for (int j=0; j < strTime.length(); j++)
-    { 
-     if(strTime.charAt(j) == ';') 
-      { 
-        timerOn[i][f] = strTime.substring(r, j); 
-        r=(j+1); 
-        f++;
-      }
-    }
-    strTime = eeprom_read(timeOffAddr+(i*timeLength), timeLength);
-    f = 0, r=0;
-    for (int j=0; j < strTime.length(); j++)
-    { 
-     if(strTime.charAt(j) == ';') 
-      { 
-        timerOff[i][f] = strTime.substring(r, j); 
-        r=(j+1); 
-        f++;
-      }
-    }
-  }
 }
 
 void connectToWifi(){
@@ -375,10 +309,6 @@ void connectToWifi(){
     if(i>20) {
       Serial.println("WiFi not connected. Please use \""+String(ap_ssid)+"\" AP to config");
     }else{
-      //Set hostname
-      if (!MDNS.begin(hostname)) {
-          Serial.println("Error setting up MDNS responder!");
-      }
       //Set Static IP
       String strIp = eeprom_read(ipAddr, ipLength);
       Serial.println(strIp);
@@ -415,6 +345,7 @@ void connectToWifi(){
       Serial.println("WiFi connected.");
       
       wifiConnected = true;
+      irsend.begin();
       timeClient.begin();
       syncTime();
     }
@@ -468,13 +399,13 @@ void updateTime(){
 void setup() {
   Serial.begin(115200);
   delay(100);
-
+  
   // Initialize Access Point
   WiFi.softAP(ap_ssid, ap_password);
   Serial.print("visit: \n"); 
   Serial.println(WiFi.softAPIP());
 
-  //  in case want to try write manually
+//      in case want to try write manually
 //    eeprom_write("ssid", ssidAddr,ssidLength);
 //    eeprom_write("password", pwdAddr,pwdLength);
 //    eeprom_write("192.168.1.113", ipAddr,ipLength);
@@ -482,47 +413,18 @@ void setup() {
 //    eeprom_write("192.168.1.1", ipGatewayAddr,ipLength);
 //    eeprom_write("192.168.1.1", ipDNSAddr,ipLength);
 
-//  in case something wrong,  depend on NUM_RELAYS
-// eeprom_write_single(255, gpioAddr);
-// eeprom_write_single(255, gpioAddr+1);
-// eeprom_write_single(255, gpioAddr+2);
-// eeprom_write_single(255, gpioAddr+3);
-// eeprom_write_single(255, gpioAddr+4);
-// eeprom_write_single(255, gpioAddr+5);
-
   connectToWifi();
-
-  // Initialize PIN
-  for(int i=0; i<NUM_RELAYS; i++){
-    pinMode(eeprom_read_single(gpioAddr+i), OUTPUT);
-    int defaultState = eeprom_read_single(gpioStateAddr+i);
-    if(RELAY_NO){
-      if (defaultState == 1){
-        digitalWrite(eeprom_read_single(gpioAddr+i), HIGH);
-      }else{
-        digitalWrite(eeprom_read_single(gpioAddr+i), LOW);
-      }
-    }
-    else{
-      if (defaultState == 1){
-        digitalWrite(eeprom_read_single(gpioAddr+i), LOW);
-      }else{
-        digitalWrite(eeprom_read_single(gpioAddr+i), HIGH);
-      }
-    }
-  }
-
   readTimer();
-  
+
   // start web server
   server.on("/", handleRoot);
+  server.on("/feeding", handleFeeding);
   server.on("/wificonfig", handleWifiConfigForm);
   server.on("/savewificonfig", HTTP_POST, handleSaveWifiConfigForm);
-  server.on("/gpioconfig", handleGPIOConfigForm);
-  server.on("/savegpioconfig", HTTP_POST, handleSaveGPIOConfigForm);
+  server.on("/servoconfig", handleServoConfigForm);
+  server.on("/saveservoconfig", HTTP_POST, handleSaveServoConfigForm);
   server.on("/timerconfig", handleTimerConfigForm);
   server.on("/savetimerconfig", HTTP_POST, handleSaveTimerConfigForm);
-  server.on("/updaterelay", HTTP_GET, handleUpdateRelay);
   server.on("/restart", HTTP_GET, handleRestart);
   server.begin();
 
@@ -545,15 +447,16 @@ void setup() {
   });
   ArduinoOTA.begin();
   
+  
 }
 
 long lastMilis = 0; 
 
 void loop(){
   server.handleClient();
-  ArduinoOTA.handle();
   updateTime();
-
+  ArduinoOTA.handle();
+  
   // execute in second
   if (millis() >= lastMilis+1000){
     lastMilis=millis();
@@ -565,17 +468,15 @@ void loop(){
     if (seconds == 0 and minutes == 30){
         syncTime();
     }
+    
     // Execute Timer
-    String checkTime = String(hours)+":"+String(minutes)+":"+String(seconds);    
-    for(int i=0; i<NUM_RELAYS; i++){
-      for (int j=0;j<TIMER_LIMIT;j++){
-        if (timerOn[i][j] == checkTime) {
-          updateRelay(i,1);
-        }
-        if (timerOff[i][j] == checkTime) {
-          updateRelay(i,0);
-        }
+    String checkTime = String(hours)+":"+String(minutes)+":"+String(seconds);   
+    for (int i=0;i<TIMER_LIMIT;i++){
+      if (timer[i] == checkTime) {
+//        servoWrite();
       }
     }
   }
+  
+  
 }
