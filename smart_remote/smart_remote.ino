@@ -8,11 +8,11 @@
 #include <IRremoteESP8266.h>
 #include <IRsend.h>
 
-IRsend irsend(0);
+IRsend irsend(4);
 
 // #### Network Configuration ####
 // Access Point network credentials
-const char* ap_ssid     = "remotek1";
+const char* ap_ssid     = "remotek2";
 const char* ap_password = "remote12345";
 bool wifiConnected = false;
 
@@ -345,7 +345,6 @@ void connectToWifi(){
       Serial.println("WiFi connected.");
       
       wifiConnected = true;
-      irsend.begin();
       timeClient.begin();
       syncTime();
     }
@@ -397,6 +396,7 @@ void updateTime(){
 }
 
 void setup() {
+  irsend.begin();
   Serial.begin(115200);
   delay(100);
   

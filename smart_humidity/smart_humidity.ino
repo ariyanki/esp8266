@@ -12,6 +12,7 @@ DHT dht(DHTPIN, DHTTYPE);
 
 float t = 0.0;
 float h = 0.0;
+int interval = 10;
 
 // #### Network Configuration ####
 // Access Point network credentials
@@ -310,7 +311,22 @@ void setup() {
   ArduinoOTA.begin();
 }
 
+void reloadRead(){
+  // Read Temp
+      float newT = dht.readTemperature();
+      if (!isnan(newT)) {
+        t = newT-2.5;
+      }
+      
+      // Read Humidity
+      float newH = dht.readHumidity();
+      if (!isnan(newH)) {
+        h = newH;
+      }
+  }
+
 long lastMilis = 0; 
+int i = 0;
 
 void loop(){
   server.handleClient();
@@ -326,16 +342,11 @@ void loop(){
       connectToWifi();
     }
 
-    // Read Temp
-    float newT = dht.readTemperature();
-    if (!isnan(newT)) {
-      t = newT;
-    }
-    
-    // Read Humidity
-    float newH = dht.readHumidity();
-    if (!isnan(newH)) {
-      h = newH;
+    i+=1;
+    if (i<=interval){
+      reloadRead();
+    }else{
+      i=0;
     }
   }
   

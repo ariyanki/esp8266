@@ -9,14 +9,14 @@
 
 
 #define RELAY_NO    false
-#define NUM_RELAYS 1 // this number impact to eeprom size max 4096, for 24 times setting, each time 9 char *24 * num relays 
+#define NUM_RELAYS 2 // this number impact to eeprom size max 4096, for 24 times setting, each time 9 char *24 * num relays 
 #define TIMER_LIMIT 24 // for 24 times setting, each time 9 char *24
 
 // #### Network Configuration ####
 // Access Point network credentials
-const char* hostname     = "saklarlampubelakang";
-const char* ap_ssid     = "saklarlbelakang";
-const char* ap_password = "esp82661235";
+const char* hostname     = "saklarkamardepan";
+const char* ap_ssid     = "saklarkamardepan";
+const char* ap_password = "esp826612345";
 bool wifiConnected = false;
 
 // Set web server port number to 80
@@ -119,11 +119,16 @@ String logStr = "";
 
 String headerHtml = "<!DOCTYPE html><html>"
   "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-  "<link rel=\"icon\" href=\"data:,\">"
-  "<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}"
+  "<link rel=\"stylesheet\" href=\"https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css\" integrity=\"sha384-HSMxcRTRxnN+Bdg0JdbxYKrThecOKuH5zCYotlSAcp1+c8xmyTe9GYg1l9a69psu\" crossorigin=\"anonymous\">"
+  "<link rel=\"stylesheet\" href=\"https://use.fontawesome.com/releases/v5.7.2/css/all.css\" integrity=\"sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr\" crossorigin=\"anonymous\">"
+  "<style>"
+  "html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}"
+  "body {margin:0px}"
   ".button { background-color: #195B6A; border: none; color: white; padding: 16px 40px;"
   "text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer;}"
-  ".button2 {background-color: #77878A;}"
+  ".button { background-color: #195B6A; border: none; color: white; padding: 16px 40px;text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer;}"
+  ".button2 {background-color: #77878A;border-radius: 15px; display: inline-grid;text-decoration: none;}"
+  ".header {background-color: black; color: white;padding: 20px;margin: 0px; margin-bottom: 20px;}"
   ".switch {position: relative; display: inline-block; width: 120px; height: 68px} "
   ".switch input {display: none}"
   ".slider {position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; border-radius: 34px}"
@@ -131,7 +136,8 @@ String headerHtml = "<!DOCTYPE html><html>"
   "input:checked+.slider {background-color: #2196F3}"
   "input:checked+.slider:before {-webkit-transform: translateX(52px); -ms-transform: translateX(52px); transform: translateX(52px)}"
   "</style></head>";
-String footerHtml = "<html>";
+String footerHtml = "<script src=\"https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js\" integrity=\"sha384-aJ21OjlMXNL5UyIl/XNwTMqvzeRMZH2w8c5cRVpzpU8Y5bApTppSuUkhZXN0VxHd\" crossorigin=\"anonymous\"></script>"
+   "<html>";
 
 String redirectToRootHtml  = "<!DOCTYPE html><html>"
   "<head><script>window.location.href = \"/\";</script></head>"            
@@ -139,8 +145,8 @@ String redirectToRootHtml  = "<!DOCTYPE html><html>"
 
 String savedNotifHtml  = headerHtml + "<body><br/><br/>"
     "<p>Your configuration has been saved, if you are sure with your configuration then please restart your device</p>"
-    "<p><a href=\"#\"><button class=\"button button2\" onclick=\"restart()\">Restart</button></a></p>"
-    "<p><a href=\"/\"><button class=\"button button2\">Back to home</button></a></p>"
+    "<p><a href=\"#\"><button class=\"button button2\" onclick=\"restart()\"><i class=\"fas fa-redo\"></i> Restart</button></a></p>"
+    "<p><a href=\"/\"><button class=\"button button2\"><i class=\"fas fa-arrow-left\"></i> Back to home</button></a></p>"
     "<script>"
     "function restart(element) {"
     "var xhr = new XMLHttpRequest();"
@@ -178,16 +184,13 @@ void handleRoot() {
   
   syncTime();
   
-  String htmlRes  = headerHtml + "<body><h1>Smart Plug</h1>"
+  String htmlRes  = headerHtml + "<body><h1 class=\"header\">Smart Plug</h1>"
     "<p>"+currentDay+", "+currentDate+" "+hours+":"+minutes+":"+seconds+"</p>"
     "<p>To make this timer work, please make sure wifi configuration connected to internet because it is connected to NTP Server.</p>"
     "<p>If the datetime above correct then your wifi configuration is correct.</p>"
     "<p>"+logStr+"</p>"
-    "<p><a href=\"/wificonfig\"><button class=\"button button2\">Wifi Config</button></a></p>"
-    "<p><a href=\"/gpioconfig\"><button class=\"button button2\">Plug GPIO Config</button></a></p>"
-    "<p><a href=\"/timerconfig\"><button class=\"button button2\">Timer Config</button></a></p>"
-    "<p><a href=\"#\"><button class=\"button button2\" onclick=\"restart()\">Restart</button></a></p>"
     "<p>"+buttons+"</p>"
+    "<p style=\"margin-top: 40px;\"><a href=\"/settings\"><button class=\"button button2\"><i class=\"fas fa-cogs\"></i> Settings</button></a></p>"
     "<script>"
     "function toggleCheckbox(element) {"
     "var xhr = new XMLHttpRequest();"
@@ -195,6 +198,21 @@ void handleRoot() {
     "else { xhr.open(\"GET\", \"/updaterelay?relay=\"+element.id+\"&state=0\", true); }"
     "xhr.send();"
     "}"
+    "</script>"
+    "</body>"+footerHtml;
+            
+  server.send(200, "text/html", htmlRes);
+}
+
+void handleSettings() {
+  String htmlRes  = headerHtml + "<body><h1 class=\"header\">Settings</h1>"
+    "<p><a href=\"/wificonfig\"><button class=\"button button2\"><i class=\"fas fa-wifi\"></i> Wifi Config</button></a></p>"
+    "<p><a href=\"/gpioconfig\"><button class=\"button button2\"><i class=\"fas fa-plug\"></i> Plug GPIO Config</button></a></p>"
+    "<p><a href=\"/timerconfig\"><button class=\"button button2\"><i class=\"fas fa-clock\"></i> Timer Config</button></a></p>"
+    "<p><a href=\"#\"><button class=\"button button2\" onclick=\"restart()\"><i class=\"fas fa-redo\"></i> Restart</button></a></p>"
+    "<p><a href=\"/\"><button class=\"button button2\"><i class=\"fas fa-arrow-left\"></i> Back to home</button></a></p>"
+    "<p></p>"
+    "<script>"
     "function restart(element) {"
     "var xhr = new XMLHttpRequest();"
     "xhr.open(\"GET\", \"/restart\", true);"
@@ -214,16 +232,16 @@ void handleWifiConfigForm() {
   String strGateway = eeprom_read(ipGatewayAddr, ipLength);
   String strDNS = eeprom_read(ipDNSAddr, ipLength);
   
-  String htmlRes  = headerHtml + "<body><h1>Wifi Config</h1>"
-    "<form method=post action=\"/savewificonfig\">"
-    "<p><b>SSID</b><br/><input type=text name=ssid id=ssid value=\""+ssid+"\"><br/>(max 32 character)</p>"
-    "<p><b>Password</b><br/><input type=text name=password id=password value=\""+password+"\"><br/>(max 32 character)</p>"
+  String htmlRes  = headerHtml + "<body><h1 class=\"header\">Wifi Config</h1>"
+    "<form method=post action=\"/savewificonfig\" style=\"margin: 20px\">"
+    "<p><b>SSID</b><br/><input type=text class=\"form-control\" name=ssid id=ssid value=\""+ssid+"\"><br/>(max 32 character)</p>"
+    "<p><b>Password</b><br/><input type=text class=\"form-control\" name=password id=password value=\""+password+"\"><br/>(max 32 character)</p>"
     "<p>Manual Setting IP<br/>(leave empty if you want to use DHCP)</p>"
-    "<p><b>IP Address</b><br/><input type=text name=ip id=ip value=\""+strIp+"\"></p>"
-    "<p><b>Subnet</b><br/><input type=text name=subnet id=subnet value=\""+strSubnet+"\"></p>"
-    "<p><b>Gateway</b><br/><input type=text name=gateway id=gateway value=\""+strGateway+"\"></p>"
-    "<p><b>DNS</b><br/><input type=text name=dns id=dns value=\""+strDNS+"\"></p>"
-    "<p><input type=submit value=Save> <input type=button value=Cancel onclick=\"window.location.href = '/';\"></p>"
+    "<p><b>IP Address</b><br/><input type=text class=\"form-control\" name=ip id=ip value=\""+strIp+"\"></p>"
+    "<p><b>Subnet</b><br/><input type=text class=\"form-control\" name=subnet id=subnet value=\""+strSubnet+"\"></p>"
+    "<p><b>Gateway</b><br/><input type=text class=\"form-control\" name=gateway id=gateway value=\""+strGateway+"\"></p>"
+    "<p><b>DNS</b><br/><input type=text class=\"form-control\" name=dns id=dns value=\""+strDNS+"\"></p>"
+    "<p><button type=submit value=Save class=\"button button2\"><i class=\"fas fa-save\"></i> Save</button> <button type=\"button\" onclick=\"window.location.href = '/';\" class=\"button button2\"><i class=\"fas fa-arrow-left\"></i> Cancel</button></p>"
     "</form>"
     "</body>"+footerHtml;
     
@@ -248,13 +266,13 @@ void handleGPIOConfigForm() {
     if(eeprom_read_single(gpioStateAddr+i)==1){
       defaultStateCheck = "checked";
     }
-    inputForm += "<p><b>Plug #"+String(i+1)+" GPIO Number</b></br><input type=text name=gpio"+i+" id=gpio"+i+" value=\""+eeprom_read_single(gpioAddr+i)+"\"></p>"
-    "<p><b>Default State</b> <input type=checkbox name=defaultstate"+(i)+" id=defaultstate"+(i)+" "+defaultStateCheck+" value=\"1\"> On </p>";
+    inputForm += "<p><b>Plug #"+String(i+1)+" GPIO Number</b></br><input type=text class=\"form-control\" name=gpio"+i+" id=gpio"+i+" value=\""+eeprom_read_single(gpioAddr+i)+"\"></p>"
+    "<p><b>Default State</b> <input type=checkbox class=\"form-control\" name=defaultstate"+(i)+" id=defaultstate"+(i)+" "+defaultStateCheck+" value=\"1\" style=\"box-shadow: 0 0 black;\"> On </p>";
   }
   
-  String htmlRes  = headerHtml + "<body><h1>Plug GPIO Config</h1>"
-    "<form method=post action=\"/savegpioconfig\">"+inputForm+""
-    "<p><input type=submit value=Save> <input type=button value=Cancel onclick=\"window.location.href = '/';\"></p>"
+  String htmlRes  = headerHtml + "<body><h1 class=\"header\">Plug GPIO Config</h1>"
+    "<form method=post action=\"/savegpioconfig\" style=\"margin: 20px\">"+inputForm+""
+    "<p><button type=submit value=Save class=\"button button2\"><i class=\"fas fa-save\"></i> Save</button> <button type=\"button\" onclick=\"window.location.href = '/';\" class=\"button button2\"><i class=\"fas fa-arrow-left\"></i> Cancel</button></p>"
     "</form>"
     "</body>"+footerHtml;
   
@@ -276,17 +294,17 @@ void handleTimerConfigForm() {
   for(int i=0; i<NUM_RELAYS; i++){
     String strTimerOn = eeprom_read(timeOnAddr+(i*timeLength), timeLength);
     String strTimerOff = eeprom_read(timeOffAddr+(i*timeLength), timeLength);
-    inputForm += "<p><b>Timer Plug #"+String(i+1)+" On</b></br><input type=text name=gpioon"+i+" id=gpioon"+i+" value=\""+strTimerOn+"\"></p>";
-    inputForm += "<p><b>Timer Plug #"+String(i+1)+" Off</b></br><input type=text name=gpiooff"+i+" id=gpiooff"+i+" value=\""+strTimerOff+"\"></p>";
+    inputForm += "<p><b>Timer Plug #"+String(i+1)+" On</b></br><input type=text class=\"form-control\" name=gpioon"+i+" id=gpioon"+i+" value=\""+strTimerOn+"\"></p>";
+    inputForm += "<p><b>Timer Plug #"+String(i+1)+" Off</b></br><input type=text class=\"form-control\" name=gpiooff"+i+" id=gpiooff"+i+" value=\""+strTimerOff+"\"></p>";
   }
   
-  String htmlRes  = headerHtml + "<body><h1>Timer Config</h1>"
-    "<form method=post action=\"/savetimerconfig\">"
+  String htmlRes  = headerHtml + "<body><h1 class=\"header\">Timer Config</h1>"
+    "<form method=post action=\"/savetimerconfig\" style=\"margin: 20px\">"
     "<p>Format hour:minute:second without \"0\"<br/>"
     "For multiple time input with \";\" delimitier<br/>"
     "To save memory it has each limit "+String(TIMER_LIMIT)+" times setting maximum<br/>"
     "<b>Example:</b> 1:30:0;6:8:0;18:7:12</p>"+inputForm+""
-    "<p><input type=submit value=Save> <input type=button value=Cancel onclick=\"window.location.href = '/';\"></p>"
+    "<p><button type=submit value=Save class=\"button button2\"><i class=\"fas fa-save\"></i> Save</button> <button type=\"button\" onclick=\"window.location.href = '/';\" class=\"button button2\"><i class=\"fas fa-arrow-left\"></i> Cancel</button></p>"
     "</form>"
     "</body>"+footerHtml;
   
@@ -516,6 +534,7 @@ void setup() {
   
   // start web server
   server.on("/", handleRoot);
+  server.on("/settings", handleSettings);
   server.on("/wificonfig", handleWifiConfigForm);
   server.on("/savewificonfig", HTTP_POST, handleSaveWifiConfigForm);
   server.on("/gpioconfig", handleGPIOConfigForm);
@@ -558,13 +577,11 @@ void loop(){
   if (millis() >= lastMilis+1000){
     lastMilis=millis();
     
+    // retry wifi connection
     if (seconds == 30 and !wifiConnected){
       connectToWifi();
     }
-    // Sync to NTP
-    if (seconds == 0 and minutes == 30){
-        syncTime();
-    }
+    
     // Execute Timer
     String checkTime = String(hours)+":"+String(minutes)+":"+String(seconds);    
     for(int i=0; i<NUM_RELAYS; i++){
