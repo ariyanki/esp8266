@@ -9,13 +9,13 @@
 
 
 #define RELAY_NO    false
-#define NUM_RELAYS 2 // this number impact to eeprom size max 4096, for 24 times setting, each time 9 char *24 * num relays 
+#define NUM_RELAYS 4 // this number impact to eeprom size max 4096, for 24 times setting, each time 9 char *24 * num relays 
 #define TIMER_LIMIT 24 // for 24 times setting, each time 9 char *24
 
 // #### Network Configuration ####
 // Access Point network credentials
-const char* hostname     = "saklarkamardepan";
-const char* ap_ssid     = "saklarkamardepan";
+const char* hostname     = "saklar12v";
+const char* ap_ssid     = "saklar12v";
 const char* ap_password = "esp826612345";
 bool wifiConnected = false;
 
@@ -41,7 +41,7 @@ String currentDate = "";
 String currentDay = "";
 
 
-// #### Feeding Timer Configuration ####
+// #### Timer Configuration ####
 String timerOn[NUM_RELAYS][TIMER_LIMIT];
 String timerOff[NUM_RELAYS][TIMER_LIMIT];
 
@@ -182,14 +182,12 @@ void handleRoot() {
     buttons+= "<h4>Plug #" + String(i+1) + " - GPIO " + eeprom_read_single(gpioAddr+i) + "</h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"" + String(i) + "\" "+ relayState(i) +"><span class=\"slider\"></span></label>";
   }
   
-  syncTime();
-  
   String htmlRes  = headerHtml + "<body><h1 class=\"header\">Smart Plug</h1>"
-    "<p>"+currentDay+", "+currentDate+" "+hours+":"+minutes+":"+seconds+"</p>"
-    "<p>To make this timer work, please make sure wifi configuration connected to internet because it is connected to NTP Server.</p>"
-    "<p>If the datetime above correct then your wifi configuration is correct.</p>"
+    "<h3 style=\"margin-bottom: 20px;\">"+currentDay+", "+currentDate+" "+hours+":"+minutes+":"+seconds+"</h3><hr>"
     "<p>"+logStr+"</p>"
     "<p>"+buttons+"</p>"
+    "<p>To make this timer work, please make sure your wifi connected to the internet to get time from NTP Server.</p>"
+    "<p>If the datetime above correct then your wifi configuration is correct.</p>"
     "<p style=\"margin-top: 40px;\"><a href=\"/settings\"><button class=\"button button2\"><i class=\"fas fa-cogs\"></i> Settings</button></a></p>"
     "<script>"
     "function toggleCheckbox(element) {"
@@ -206,9 +204,11 @@ void handleRoot() {
 
 void handleSettings() {
   String htmlRes  = headerHtml + "<body><h1 class=\"header\">Settings</h1>"
+    "<h3 style=\"margin-bottom: 20px;\">"+currentDay+", "+currentDate+" "+hours+":"+minutes+":"+seconds+"</h3><hr>"
     "<p><a href=\"/wificonfig\"><button class=\"button button2\"><i class=\"fas fa-wifi\"></i> Wifi Config</button></a></p>"
     "<p><a href=\"/gpioconfig\"><button class=\"button button2\"><i class=\"fas fa-plug\"></i> Plug GPIO Config</button></a></p>"
     "<p><a href=\"/timerconfig\"><button class=\"button button2\"><i class=\"fas fa-clock\"></i> Timer Config</button></a></p>"
+    "<p><a href=\"#\"><button class=\"button button2\" onclick=\"synctime()\"><i class=\"fas fa-clock\"></i> Sync Time</button></a></p>"
     "<p><a href=\"#\"><button class=\"button button2\" onclick=\"restart()\"><i class=\"fas fa-redo\"></i> Restart</button></a></p>"
     "<p><a href=\"/\"><button class=\"button button2\"><i class=\"fas fa-arrow-left\"></i> Back to home</button></a></p>"
     "<p></p>"
@@ -216,6 +216,10 @@ void handleSettings() {
     "function restart(element) {"
     "var xhr = new XMLHttpRequest();"
     "xhr.open(\"GET\", \"/restart\", true);"
+    "xhr.send();"
+    "function synctime(element) {"
+    "var xhr = new XMLHttpRequest();"
+    "xhr.open(\"GET\", \"/synctime\", true);"
     "xhr.send();"
     "}"
     "</script>"
@@ -299,11 +303,11 @@ void handleTimerConfigForm() {
   }
   
   String htmlRes  = headerHtml + "<body><h1 class=\"header\">Timer Config</h1>"
-    "<form method=post action=\"/savetimerconfig\" style=\"margin: 20px\">"
+    "<form method=post action=\"/savetimerconfig\" style=\"margin: 20px\">"+inputForm+""
     "<p>Format hour:minute:second without \"0\"<br/>"
     "For multiple time input with \";\" delimitier<br/>"
     "To save memory it has each limit "+String(TIMER_LIMIT)+" times setting maximum<br/>"
-    "<b>Example:</b> 1:30:0;6:8:0;18:7:12</p>"+inputForm+""
+    "<b>Example:</b> 1:30:0;6:8:0;18:7:12</p>"
     "<p><button type=submit value=Save class=\"button button2\"><i class=\"fas fa-save\"></i> Save</button> <button type=\"button\" onclick=\"window.location.href = '/';\" class=\"button button2\"><i class=\"fas fa-arrow-left\"></i> Cancel</button></p>"
     "</form>"
     "</body>"+footerHtml;
@@ -329,6 +333,10 @@ void handleUpdateRelay() {
 
 void handleRestart() {
   ESP.restart();
+}
+
+void handleSyncTime() {
+  syncTime();
 }
 
 void updateRelay(int relayno, int relaystate){
@@ -393,10 +401,6 @@ void connectToWifi(){
     if(i>20) {
       Serial.println("WiFi not connected. Please use \""+String(ap_ssid)+"\" AP to config");
     }else{
-      //Set hostname
-      if (!MDNS.begin(hostname)) {
-          Serial.println("Error setting up MDNS responder!");
-      }
       //Set Static IP
       String strIp = eeprom_read(ipAddr, ipLength);
       Serial.println(strIp);
@@ -431,6 +435,11 @@ void connectToWifi(){
         }
       }
       Serial.println("WiFi connected.");
+      
+      //Set hostname
+      if (!MDNS.begin(hostname)) {
+          Serial.println("Error setting up MDNS responder!");
+      }
       
       wifiConnected = true;
       timeClient.begin();
@@ -543,6 +552,7 @@ void setup() {
   server.on("/savetimerconfig", HTTP_POST, handleSaveTimerConfigForm);
   server.on("/updaterelay", HTTP_GET, handleUpdateRelay);
   server.on("/restart", HTTP_GET, handleRestart);
+  server.on("/synctime", HTTP_GET, handleSyncTime);
   server.begin();
 
   ArduinoOTA.onStart([]() {

@@ -4,6 +4,7 @@
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 #include <ESP8266WebServer.h>
+#include <ESP8266mDNS.h>
 #include <EEPROM.h>
 #include <ArduinoOTA.h>
 
@@ -13,7 +14,8 @@ int servoTo = 0;
 
 // #### Network Configuration ####
 // Access Point network credentials
-const char* ap_ssid     = "esp2866feeder";
+const char* hostname     = "pakanikan";
+const char* ap_ssid     = "pakanikan";
 const char* ap_password = "esp826612345";
 bool wifiConnected = false;
 
@@ -127,17 +129,30 @@ void readTimer(){
 }
 
 // #### HTTP Configuration ####
-// Current time
+
 String logStr = "";
 
 String headerHtml = "<!DOCTYPE html><html>"
   "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-  "<link rel=\"icon\" href=\"data:,\">"
-  "<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}"
+  "<link rel=\"stylesheet\" href=\"https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css\" integrity=\"sha384-HSMxcRTRxnN+Bdg0JdbxYKrThecOKuH5zCYotlSAcp1+c8xmyTe9GYg1l9a69psu\" crossorigin=\"anonymous\">"
+  "<link rel=\"stylesheet\" href=\"https://use.fontawesome.com/releases/v5.7.2/css/all.css\" integrity=\"sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr\" crossorigin=\"anonymous\">"
+  "<style>"
+  "html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}"
+  "body {margin:0px}"
   ".button { background-color: #195B6A; border: none; color: white; padding: 16px 40px;"
   "text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer;}"
-  ".button2 {background-color: #77878A;}</style></head>";
-String footerHtml = "<html>";
+  ".button { background-color: #195B6A; border: none; color: white; padding: 16px 40px;text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer;}"
+  ".button2 {background-color: #77878A;border-radius: 15px; display: inline-grid;text-decoration: none;}"
+  ".header {background-color: black; color: white;padding: 20px;margin: 0px; margin-bottom: 20px;}"
+  ".switch {position: relative; display: inline-block; width: 120px; height: 68px} "
+  ".switch input {display: none}"
+  ".slider {position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; border-radius: 34px}"
+  ".slider:before {position: absolute; content: \"\"; height: 52px; width: 52px; left: 8px; bottom: 8px; background-color: #fff; -webkit-transition: .4s; transition: .4s; border-radius: 68px}"
+  "input:checked+.slider {background-color: #2196F3}"
+  "input:checked+.slider:before {-webkit-transform: translateX(52px); -ms-transform: translateX(52px); transform: translateX(52px)}"
+  "</style></head>";
+String footerHtml = "<script src=\"https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js\" integrity=\"sha384-aJ21OjlMXNL5UyIl/XNwTMqvzeRMZH2w8c5cRVpzpU8Y5bApTppSuUkhZXN0VxHd\" crossorigin=\"anonymous\"></script>"
+   "<html>";
 
 String redirectToRootHtml  = "<!DOCTYPE html><html>"
   "<head><script>window.location.href = \"/\";</script></head>"            
@@ -145,8 +160,8 @@ String redirectToRootHtml  = "<!DOCTYPE html><html>"
 
 String savedNotifHtml  = headerHtml + "<body><br/><br/>"
     "<p>Your configuration has been saved, if you are sure with your configuration then please restart your device</p>"
-    "<p><a href=\"#\"><button class=\"button button2\" onclick=\"restart()\">Restart</button></a></p>"
-    "<p><a href=\"/\"><button class=\"button button2\">Back to home</button></a></p>"
+    "<p><a href=\"#\"><button class=\"button button2\" onclick=\"restart()\"><i class=\"fas fa-redo\"></i> Restart</button></a></p>"
+    "<p><a href=\"/\"><button class=\"button button2\"><i class=\"fas fa-arrow-left\"></i> Back to home</button></a></p>"
     "<script>"
     "function restart(element) {"
     "var xhr = new XMLHttpRequest();"
@@ -157,27 +172,43 @@ String savedNotifHtml  = headerHtml + "<body><br/><br/>"
     "</body>"+footerHtml;
 
 void handleRoot() {
-  syncTime();
   
-  String htmlRes  = headerHtml + "<body><h1>Smart Feeder</h1>"
-    "<p>"+currentDay+", "+currentDate+" "+hours+":"+minutes+":"+seconds+"</p>"
-    "<p>To make this timer work, please make sure wifi configuration connected to internet because it is connected to NTP Server.</p>"
-    "<p>If the datetime above correct then your wifi configuration is correct.</p>"
+  String htmlRes  = headerHtml + "<body><h1 class=\"header\">Smart Feeder</h1>"
+    "<h3 style=\"margin-bottom: 20px;\">"+currentDay+", "+currentDate+" "+hours+":"+minutes+":"+seconds+"</h3><hr>"
     "<p>"+logStr+"</p>"
-    "<p><a href=\"/wificonfig\"><button class=\"button button2\">Wifi Config</button></a></p>"
-    "<p><a href=\"/servoconfig\"><button class=\"button button2\">Servo Config</button></a></p>"
-    "<p><a href=\"/timerconfig\"><button class=\"button button2\">Timer Config</button></a></p>"
-    "<p><a href=\"#\"><button class=\"button button2\" onclick=\"restart()\">Restart</button></a></p>"
-    "<p></p>"
     "<p><button class=\"button button2\" onclick=\"testFeed()\">Feeding Test</button></p>"
+    "<p>To make this timer work, please make sure your wifi connected to the internet to get time from NTP Server.</p>"
+    "<p>If the datetime above correct then your wifi configuration is correct.</p>"
+    "<p style=\"margin-top: 40px;\"><a href=\"/settings\"><button class=\"button button2\"><i class=\"fas fa-cogs\"></i> Settings</button></a></p>"
     "<script>function testFeed() {"
     "var xhr = new XMLHttpRequest();"
     "xhr.open(\"GET\", \"/feeding\", true);"
     "xhr.send();"
     "}"
+    "</script>"
+    "</body>"+footerHtml;
+            
+  server.send(200, "text/html", htmlRes);
+}
+
+void handleSettings() {
+  String htmlRes  = headerHtml + "<body><h1 class=\"header\">Settings</h1>"
+    "<h3 style=\"margin-bottom: 20px;\">"+currentDay+", "+currentDate+" "+hours+":"+minutes+":"+seconds+"</h3><hr>"
+    "<p><a href=\"/wificonfig\"><button class=\"button button2\"><i class=\"fas fa-wifi\"></i> Wifi Config</button></a></p>"
+    "<p><a href=\"/servoconfig\"><button class=\"button button2\"><i class=\"fas fa-plug\"></i> Servo Config</button></a></p>"
+    "<p><a href=\"/timerconfig\"><button class=\"button button2\"><i class=\"fas fa-clock\"></i> Timer Config</button></a></p>"
+    "<p><a href=\"#\"><button class=\"button button2\" onclick=\"synctime()\"><i class=\"fas fa-clock\"></i> Sync Time</button></a></p>"
+    "<p><a href=\"#\"><button class=\"button button2\" onclick=\"restart()\"><i class=\"fas fa-redo\"></i> Restart</button></a></p>"
+    "<p><a href=\"/\"><button class=\"button button2\"><i class=\"fas fa-arrow-left\"></i> Back to home</button></a></p>"
+    "<p></p>"
+    "<script>"
     "function restart(element) {"
     "var xhr = new XMLHttpRequest();"
     "xhr.open(\"GET\", \"/restart\", true);"
+    "xhr.send();"
+    "function synctime(element) {"
+    "var xhr = new XMLHttpRequest();"
+    "xhr.open(\"GET\", \"/synctime\", true);"
     "xhr.send();"
     "}"
     "</script>"
@@ -199,16 +230,16 @@ void handleWifiConfigForm() {
   String strGateway = eeprom_read(ipGatewayAddr, ipLength);
   String strDNS = eeprom_read(ipDNSAddr, ipLength);
   
-  String htmlRes  = headerHtml + "<body><h1>Wifi Config</h1>"
-    "<form method=post action=\"/savewificonfig\">"
-    "<p><b>SSID</b><br/><input type=text name=ssid id=ssid value=\""+ssid+"\"><br/>(max 32 character)</p>"
-    "<p><b>Password</b><br/><input type=text name=password id=password value=\""+password+"\"><br/>(max 32 character)</p>"
+  String htmlRes  = headerHtml + "<body><h1 class=\"header\">Wifi Config</h1>"
+    "<form method=post action=\"/savewificonfig\" style=\"margin: 20px\">"
+    "<p><b>SSID</b><br/><input type=text class=\"form-control\" name=ssid id=ssid value=\""+ssid+"\"><br/>(max 32 character)</p>"
+    "<p><b>Password</b><br/><input type=text class=\"form-control\" name=password id=password value=\""+password+"\"><br/>(max 32 character)</p>"
     "<p>Manual Setting IP<br/>(leave empty if you want to use DHCP)</p>"
-    "<p><b>IP Address</b><br/><input type=text name=ip id=ip value=\""+strIp+"\"></p>"
-    "<p><b>Subnet</b><br/><input type=text name=subnet id=subnet value=\""+strSubnet+"\"></p>"
-    "<p><b>Gateway</b><br/><input type=text name=gateway id=gateway value=\""+strGateway+"\"></p>"
-    "<p><b>DNS</b><br/><input type=text name=dns id=dns value=\""+strDNS+"\"></p>"
-    "<p><input type=submit value=Save> <input type=button value=Cancel onclick=\"window.location.href = '/';\"></p>"
+    "<p><b>IP Address</b><br/><input type=text class=\"form-control\" name=ip id=ip value=\""+strIp+"\"></p>"
+    "<p><b>Subnet</b><br/><input type=text class=\"form-control\" name=subnet id=subnet value=\""+strSubnet+"\"></p>"
+    "<p><b>Gateway</b><br/><input type=text class=\"form-control\" name=gateway id=gateway value=\""+strGateway+"\"></p>"
+    "<p><b>DNS</b><br/><input type=text class=\"form-control\" name=dns id=dns value=\""+strDNS+"\"></p>"
+    "<p><button type=submit value=Save class=\"button button2\"><i class=\"fas fa-save\"></i> Save</button> <button type=\"button\" onclick=\"window.location.href = '/';\" class=\"button button2\"><i class=\"fas fa-arrow-left\"></i> Cancel</button></p>"
     "</form>"
     "</body>"+footerHtml;
     
@@ -231,12 +262,12 @@ void handleServoConfigForm() {
   String strWriteFrom = String(eeprom_read_single(servoWriteFromAddr));
   String strWriteTo = String(eeprom_read_single(servoWriteToAddr));
   
-  String htmlRes  = headerHtml + "<body><h1>Servo Config</h1>"
-    "<form method=post action=\"/saveservoconfig\">"
-    "<p><b>GPIO Number</b></br><input type=text name=gpio id=gpio value=\""+strGPIO+"\"></p>"
-    "<p><b>Write From</b></br><input type=text name=write_from id=write_from value=\""+strWriteFrom+"\"></p>"
-    "<p><b>Write To</b></br><input type=text name=write_to id=write_to value=\""+strWriteTo+"\"></p>"
-    "<p><input type=submit value=Save> <input type=button value=Cancel onclick=\"window.location.href = '/';\"></p>"
+  String htmlRes  = headerHtml + "<body><h1 class=\"header\">Servo Config</h1>"
+    "<form method=post action=\"/saveservoconfig\" style=\"margin: 20px\">"
+    "<p><b>GPIO Number</b></br><input type=text class=\"form-control\" name=gpio id=gpio value=\""+strGPIO+"\"></p>"
+    "<p><b>Write From</b></br><input type=text class=\"form-control\" name=write_from id=write_from value=\""+strWriteFrom+"\"></p>"
+    "<p><b>Write To</b></br><input type=text class=\"form-control\" name=write_to id=write_to value=\""+strWriteTo+"\"></p>"
+    "<p><button type=submit value=Save class=\"button button2\"><i class=\"fas fa-save\"></i> Save</button> <button type=\"button\" onclick=\"window.location.href = '/';\" class=\"button button2\"><i class=\"fas fa-arrow-left\"></i> Cancel</button></p>"
     "</form>"
     "</body>"+footerHtml;
   
@@ -251,17 +282,18 @@ void handleSaveServoConfigForm() {
   server.send(200, "text/html", savedNotifHtml);
 }
 
+
 void handleTimerConfigForm() {
   String strTimer = eeprom_read(timeAddr, timeLength);
   
-  String htmlRes  = headerHtml + "<body><h1>Timer Config</h1>"
-    "<form method=post action=\"/savetimerconfig\">"
+  String htmlRes  = headerHtml + "<body><h1 class=\"header\">Timer Config</h1>"
+    "<form method=post action=\"/savetimerconfig\" style=\"margin: 20px\">"
     "<p>Format hour:minute:second without \"0\"<br/>"
     "For multiple time input with \";\" delimitier<br/>"
     "To save memory it has limit "+String(TIMER_LIMIT)+" times setting maximum<br/>"
     "<b>Example:</b> 1:30:0;6:8:0;18:7:12</p>"
-    "<p><b>Timer</b></br><input type=text name=timer id=timer value=\""+strTimer+"\"></p>"
-    "<p><input type=submit value=Save> <input type=button value=Cancel onclick=\"window.location.href = '/';\"></p>"
+    "<p><b>Timer</b></br><input type=text class=\"form-control\" name=timer id=timer value=\""+strTimer+"\"></p>"
+    "<p><button type=submit value=Save class=\"button button2\"><i class=\"fas fa-save\"></i> Save</button> <button type=\"button\" onclick=\"window.location.href = '/';\" class=\"button button2\"><i class=\"fas fa-arrow-left\"></i> Cancel</button></p>"
     "</form>"
     "</body>"+footerHtml;
   
@@ -279,6 +311,9 @@ void handleRestart() {
   ESP.restart();
 }
 
+void handleSyncTime() {
+  syncTime();
+}
 
 void servoWrite() {
   // Total delay must be more than 1000 milisecond when using timer
@@ -347,6 +382,11 @@ void connectToWifi(){
         }
       }
       Serial.println("WiFi connected.");
+      
+      //Set hostname
+      if (!MDNS.begin(hostname)) {
+          Serial.println("Error setting up MDNS responder!");
+      }
       
       wifiConnected = true;
       timeClient.begin();
@@ -426,6 +466,7 @@ void setup() {
 
   // start web server
   server.on("/", handleRoot);
+  server.on("/settings", handleSettings);
   server.on("/feeding", handleFeeding);
   server.on("/wificonfig", handleWifiConfigForm);
   server.on("/savewificonfig", HTTP_POST, handleSaveWifiConfigForm);
@@ -434,6 +475,7 @@ void setup() {
   server.on("/timerconfig", handleTimerConfigForm);
   server.on("/savetimerconfig", HTTP_POST, handleSaveTimerConfigForm);
   server.on("/restart", HTTP_GET, handleRestart);
+  server.on("/synctime", HTTP_GET, handleSyncTime);
   server.begin();
 
   ArduinoOTA.onStart([]() {
@@ -471,10 +513,6 @@ void loop(){
     
     if (seconds == 30 and !wifiConnected){
       connectToWifi();
-    }
-    // Sync to NTP
-    if (seconds == 0 and minutes == 30){
-        syncTime();
     }
     
     // Execute Timer
