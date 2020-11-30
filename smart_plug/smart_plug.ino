@@ -6,18 +6,26 @@
 #include <ESP8266mDNS.h>
 #include <EEPROM.h>
 #include <ArduinoOTA.h>
+#include <PubSubClient.h>
 
 
 #define RELAY_NO    false
-#define NUM_RELAYS 4 // this number impact to eeprom size max 4096, for 24 times setting, each time 9 char *24 * num relays 
+#define NUM_RELAYS 1 // this number impact to eeprom size max 4096, for 24 times setting, each time 9 char *24 * num relays 
 #define TIMER_LIMIT 24 // for 24 times setting, each time 9 char *24
 
 // #### Network Configuration ####
 // Access Point network credentials
-const char* hostname     = "saklar12v";
-const char* ap_ssid     = "saklar12v";
+const char* ap_hostname     = "saklarlampubelakang";
+const char* ap_ssid     = "saklarlampubelakang";
 const char* ap_password = "esp826612345";
-bool wifiConnected = false;
+
+const char* mqtt_server = "139.162.15.67";
+const char* mqtt_user = "test";
+const char* mqtt_password = "test1234";
+const char* topic = "plug-test";
+
+WiFiClient espClient;
+PubSubClient client(espClient);
 
 // Set web server port number to 80
 ESP8266WebServer server(80);
@@ -398,7 +406,7 @@ void connectToWifi(){
       
     }
 
-    if(i>20) {
+    if(WiFi.status() != WL_CONNECTED) {
       Serial.println("WiFi not connected. Please use \""+String(ap_ssid)+"\" AP to config");
     }else{
       //Set Static IP
@@ -436,12 +444,11 @@ void connectToWifi(){
       }
       Serial.println("WiFi connected.");
       
-      //Set hostname
-      if (!MDNS.begin(hostname)) {
+      //Set ap_hostname
+      if (!MDNS.begin(ap_hostname)) {
           Serial.println("Error setting up MDNS responder!");
       }
       
-      wifiConnected = true;
       timeClient.begin();
       syncTime();
     }
@@ -451,7 +458,7 @@ void connectToWifi(){
 }
 
 void syncTime(){
-  if (wifiConnected){
+  if (WiFi.status() == WL_CONNECTED){
     timeClient.update();
     seconds = timeClient.getSeconds();
     minutes = timeClient.getMinutes();
@@ -489,6 +496,31 @@ void updateTime(){
     if (hours == 24){
       hours = 0;
     }
+  }
+}
+
+void mqttConnect() {
+  client.setServer(mqtt_server, 1883);
+  client.setCallback(callback);
+  while (!client.connected()) {
+    if (client.connect(ap_hostname, mqtt_user, mqtt_password)) {
+      client.subscribe(topic);
+    } else {
+      delay(5000);
+    }
+  }
+}
+
+void callback(char* topic, byte* payload, unsigned int length) {
+  String relayno = "";
+  for (int i = 2; i < length; i++) {
+    relayno += (char)payload[i];
+  }
+  
+  if ((char)payload[0] == '1') {
+    updateRelay(relayno.toInt(),1);
+  }else{
+    updateRelay(relayno.toInt(),0);
   }
 }
 
@@ -555,6 +587,7 @@ void setup() {
   server.on("/synctime", HTTP_GET, handleSyncTime);
   server.begin();
 
+  // Arduino OTA Setup
   ArduinoOTA.onStart([]() {
     Serial.println("Start");
   });
@@ -588,9 +621,17 @@ void loop(){
     lastMilis=millis();
     
     // retry wifi connection
-    if (seconds == 30 and !wifiConnected){
+    if (seconds == 30 and WiFi.status() != WL_CONNECTED){
       connectToWifi();
     }
+
+    // MQTT
+//    if(WiFi.status() == WL_CONNECTED){
+//      if (!client.connected()) {
+//        mqttConnect();
+//      }
+//      client.loop();
+//    }
     
     // Execute Timer
     String checkTime = String(hours)+":"+String(minutes)+":"+String(seconds);    
