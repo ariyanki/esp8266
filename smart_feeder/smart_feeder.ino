@@ -9,23 +9,20 @@
 #include <ArduinoOTA.h>
 
 Servo servo;
-int servoFrom = 0;
+int servoDelay = 500;
 int servoTo = 0;
 
 // #### Network Configuration ####
 // Access Point network credentials
-const char* hostname     = "pakanikan1";
-const char* ap_ssid     = "pakanikan1";
-const char* ap_password = "esp826612345";
-bool wifiConnected = false;
+const char* hostname     = "ggcfdr35452";
+const char* ap_ssid     = "ggcfdr35452";
+const char* ap_password = "88752";
 
 // Set web server port number to 80
 ESP8266WebServer server(80);
 
 
 // #### NTP Configuration ####
-char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-String months[12]={"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
 
 // Define NTP Client to get time
 WiFiUDP ntpUDP;
@@ -38,9 +35,6 @@ int startingHour = 0;
 int seconds = 0;
 int minutes = 0;
 int hours = startingHour;
-String currentDate = "";
-String currentDay = "";
-
 
 // #### Timer Configuration ####
 #define TIMER_LIMIT 24 // for 24 times setting, each time 9 char *24
@@ -52,6 +46,7 @@ int singleLength = 1;
 int ssidLength = 32; 
 int pwdLength = 32;
 int ipLength=15;
+int delayLength=5;
 int timeLength=9*TIMER_LIMIT;
 
 // Address Position setting
@@ -61,9 +56,8 @@ int ipAddr = pwdAddr+pwdLength;
 int ipSubnetAddr = ipAddr+ipLength;
 int ipGatewayAddr = ipSubnetAddr+ipLength;
 int ipDNSAddr = ipGatewayAddr+ipLength;
-int gpioAddr = ipDNSAddr+ipLength;
-int servoWriteFromAddr = gpioAddr+singleLength;
-int servoWriteToAddr = servoWriteFromAddr+singleLength;
+int servoDelayAddr = ipDNSAddr+ipLength;
+int servoWriteToAddr = servoDelayAddr+delayLength;
 int timeAddr = servoWriteToAddr+singleLength;
 
 int eepromSize=timeAddr+timeLength;
@@ -158,11 +152,9 @@ String savedNotifHtml  = headerHtml + "<body><br/><br/>"
 void handleRoot() {
   
   String htmlRes  = headerHtml + "<body><h1 class=\"header\">Smart Feeder</h1>"
-    "<h3 style=\"margin-bottom: 20px;\">"+currentDay+", "+currentDate+" "+hours+":"+minutes+":"+seconds+"</h3><hr>"
+    "<h3 style=\"margin-bottom: 20px;\">"+hours+":"+minutes+":"+seconds+"</h3><hr>"
     "<p>"+logStr+"</p>"
     "<p><button class=\"button button2\" onclick=\"testFeed()\">Feeding Test</button></p>"
-    "<p>To make this timer work, please make sure your wifi connected to the internet to get time from NTP Server.</p>"
-    "<p>If the datetime above correct then your wifi configuration is correct.</p>"
     "<p style=\"margin-top: 40px;\"><a href=\"/settings\"><button class=\"button button2\"><i class=\"fas fa-cogs\"></i> Settings</button></a></p>"
     "<script>function testFeed() {"
     "var xhr = new XMLHttpRequest();"
@@ -177,9 +169,9 @@ void handleRoot() {
 
 void handleSettings() {
   String htmlRes  = headerHtml + "<body><h1 class=\"header\">Settings</h1>"
-    "<h3 style=\"margin-bottom: 20px;\">"+currentDay+", "+currentDate+" "+hours+":"+minutes+":"+seconds+"</h3><hr>"
+    "<h3 style=\"margin-bottom: 20px;\">"+hours+":"+minutes+":"+seconds+"</h3><hr>"
     "<p><a href=\"/wificonfig\"><button class=\"button button2\"><i class=\"fas fa-wifi\"></i> Wifi Config</button></a></p>"
-    "<p><a href=\"/servoconfig\"><button class=\"button button2\"><i class=\"fas fa-plug\"></i> Servo Config</button></a></p>"
+    "<p><a href=\"/servoconfig\"><button class=\"button button2\"><i class=\"fas fa-plug\"></i> Feeding Config</button></a></p>"
     "<p><a href=\"/timerconfig\"><button class=\"button button2\"><i class=\"fas fa-clock\"></i> Timer Config</button></a></p>"
     "<p><a href=\"#\"><button class=\"button button2\" onclick=\"synctime()\"><i class=\"fas fa-clock\"></i> Sync Time</button></a></p>"
     "<p><a href=\"#\"><button class=\"button button2\" onclick=\"restart()\"><i class=\"fas fa-redo\"></i> Restart</button></a></p>"
@@ -243,15 +235,13 @@ void handleSaveWifiConfigForm() {
 }
 
 void handleServoConfigForm() {
-  String strGPIO = String(eeprom_read_single(gpioAddr));
-  String strWriteFrom = String(eeprom_read_single(servoWriteFromAddr));
+  String strDelay = eeprom_read(servoDelayAddr, delayLength);
   String strWriteTo = String(eeprom_read_single(servoWriteToAddr));
   
-  String htmlRes  = headerHtml + "<body><h1 class=\"header\">Servo Config</h1>"
+  String htmlRes  = headerHtml + "<body><h1 class=\"header\">Feeding Config</h1>"
     "<form method=post action=\"/saveservoconfig\" style=\"margin: 20px\">"
-    "<p><b>GPIO Number</b></br><input type=text class=\"form-control\" name=gpio id=gpio value=\""+strGPIO+"\"></p>"
-    "<p><b>Write From</b></br><input type=text class=\"form-control\" name=write_from id=write_from value=\""+strWriteFrom+"\"></p>"
-    "<p><b>Write To</b></br><input type=text class=\"form-control\" name=write_to id=write_to value=\""+strWriteTo+"\"></p>"
+    "<p><b>Delay</b></br><input type=text class=\"form-control\" name=delay id=delay value=\""+strDelay+"\">(max 99999 milisecond)</p>"
+    "<p><b>Wide</b></br><input type=text class=\"form-control\" name=write_to id=write_to value=\""+strWriteTo+"\"><br/>(max 255)</p>"
     "<p><button type=submit value=Save class=\"button button2\"><i class=\"fas fa-save\"></i> Save</button> <button type=\"button\" onclick=\"window.location.href = '/';\" class=\"button button2\"><i class=\"fas fa-arrow-left\"></i> Cancel</button></p>"
     "</form>"
     "</body>"+footerHtml;
@@ -260,11 +250,13 @@ void handleServoConfigForm() {
 }
 
 void handleSaveServoConfigForm() {
-  eeprom_write_single(server.arg("gpio").toInt(), gpioAddr);
-  eeprom_write_single(server.arg("write_from").toInt(), servoWriteFromAddr);
+  eeprom_write(server.arg("delay"), servoDelayAddr,delayLength);
   eeprom_write_single (server.arg("write_to").toInt(), servoWriteToAddr);
   
-  server.send(200, "text/html", savedNotifHtml);
+  servoDelay = eeprom_read(servoDelayAddr, delayLength).toInt();
+  servoTo = eeprom_read_single(servoWriteToAddr);
+  
+  server.send(200, "text/html", redirectToRootHtml);
 }
 
 
@@ -303,8 +295,8 @@ void handleSyncTime() {
 void servoWrite() {
   // Total delay must be more than 1000 milisecond when using timer
   servo.write(servoTo);
-  delay(500);
-  servo.write(servoFrom);
+  delay(servoDelay);
+  servo.write(0);
   delay(2000);
 }
 
@@ -373,7 +365,6 @@ void connectToWifi(){
           Serial.println("Error setting up MDNS responder!");
       }
       
-      wifiConnected = true;
       timeClient.begin();
       syncTime();
     }
@@ -398,22 +389,12 @@ void readTimer(){
 }
 
 void syncTime(){
-  if (wifiConnected){
+  if (WiFi.status() == WL_CONNECTED){
     timeClient.update();
     seconds = timeClient.getSeconds();
     minutes = timeClient.getMinutes();
     hours = timeClient.getHours();
     timeLast = millis();
-    
-    unsigned long epochTime = timeClient.getEpochTime();
-    struct tm *ptm = gmtime ((time_t *)&epochTime);
-    int monthDay = ptm->tm_mday;
-    int currentMonth = ptm->tm_mon+1;
-    String currentMonthName = months[currentMonth-1];
-    int currentYear = ptm->tm_year+1900;
-    
-    currentDay = String(daysOfTheWeek[timeClient.getDay()]);
-    currentDate = String(monthDay) + " " + String(currentMonthName) + " " + String(currentYear);
   }
 }
 
@@ -443,10 +424,18 @@ void setup() {
   Serial.begin(115200);
   delay(100);
   // Initialize servo pin
-  servo.attach(eeprom_read_single(gpioAddr));
-  servoFrom = eeprom_read_single(servoWriteFromAddr);
-  servoTo = eeprom_read_single(servoWriteToAddr);
-  servo.write(servoFrom);
+  servo.attach(0);
+  if(eeprom_read(servoDelayAddr, delayLength)!=""){
+    servoDelay = eeprom_read(servoDelayAddr, delayLength).toInt();
+  }else{
+    eeprom_write("500", servoDelayAddr,delayLength);
+  }
+  if (eeprom_read_single(servoWriteToAddr)!=255){
+    servoTo = eeprom_read_single(servoWriteToAddr);
+  }else{
+    eeprom_write_single (60, servoWriteToAddr);
+  }
+  servo.write(0);
 
   // Initialize Access Point
   WiFi.softAP(ap_ssid, ap_password);
@@ -503,7 +492,7 @@ void loop(){
   if (millis() >= lastMilis+1000){
     lastMilis=millis();
     
-    if (seconds == 30 and !wifiConnected){
+    if (seconds == 30 and WiFi.status() != WL_CONNECTED){
       connectToWifi();
     }
     
@@ -515,6 +504,4 @@ void loop(){
       }
     }
   }
-  
-  
 }
