@@ -14,9 +14,9 @@ int servoTo = 0;
 
 // #### Network Configuration ####
 // Access Point network credentials
-const char* hostname     = "ggcfdr35452";
-const char* ap_ssid     = "ggcfdr35452";
-const char* ap_password = "88752";
+const char* hostname     = "ggcfdr";
+const char* ap_ssid     = "ggcfdr";
+const char* ap_password = "passwd";
 
 // Set web server port number to 80
 ESP8266WebServer server(80);
