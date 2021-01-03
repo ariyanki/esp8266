@@ -7,22 +7,21 @@
 #include <EEPROM.h>
 #include <ArduinoOTA.h>
 #include <PubSubClient.h>
+#include <ESP8266HTTPClient.h>
 
 
 #define RELAY_NO    false
-#define NUM_RELAYS 1 // this number impact to eeprom size max 4096, for 24 times setting, each time 9 char *24 * num relays 
 #define TIMER_LIMIT 24 // for 24 times setting, each time 9 char *24
 
 // #### Network Configuration ####
 // Access Point network credentials
-const char* ap_hostname     = "saklarlampubelakang";
-const char* ap_ssid     = "saklarlampubelakang";
+#define NUM_RELAYS 4 // this number impact to eeprom size max 4096, for 24 times setting, each time 9 char *24 * num relays 
+String html_title = "Saklar 12 v";
+const char* ap_hostname     = "saklar12v";
+const char* ap_ssid     = "saklar12v";
 const char* ap_password = "esp826612345";
 
-const char* mqtt_server = "139.162.15.67";
-const char* mqtt_user = "test";
-const char* mqtt_password = "test1234";
-const char* topic = "plug-test";
+HTTPClient httpClient;
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -61,6 +60,7 @@ int pwdLength = 32;
 int ipLength=15;
 int gpioLength=NUM_RELAYS;
 int timeLength=9*TIMER_LIMIT;
+int portLength=4;
 
 // Address Position setting
 int ssidAddr = 0;
@@ -73,8 +73,23 @@ int gpioAddr = ipDNSAddr+ipLength;
 int gpioStateAddr = gpioAddr+gpioLength;
 int timeOnAddr = gpioStateAddr+gpioLength;
 int timeOffAddr = timeOnAddr+(NUM_RELAYS*timeLength);
+int mqttServerAddr = timeOffAddr+(NUM_RELAYS*timeLength);
+int mqttPortAddr = mqttServerAddr+ipLength;
+int mqttUsernameAddr = mqttPortAddr+portLength;
+int mqttPasswordAddr = mqttUsernameAddr+ssidLength;
+int mqttTopicAddr = mqttPasswordAddr+pwdLength;
+int httpApiHostAddr = mqttTopicAddr+ssidLength;
 
-int eepromSize=timeOffAddr+(NUM_RELAYS*timeLength);
+int eepromSize= httpApiHostAddr+ssidLength;
+
+
+//Variables
+const char* mqtt_server = "";
+int mqtt_port = 0;
+const char* mqtt_user = "";
+const char* mqtt_password = "";
+const char* mqtt_topic = "";
+String http_api_host = "";
 
 
 void eeprom_write(String buffer, int addr, int length) {
@@ -127,6 +142,7 @@ String logStr = "";
 
 String headerHtml = "<!DOCTYPE html><html>"
   "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+  "<title>"+html_title+"</title>"
   "<link rel=\"stylesheet\" href=\"https://stackpath.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css\" integrity=\"sha384-HSMxcRTRxnN+Bdg0JdbxYKrThecOKuH5zCYotlSAcp1+c8xmyTe9GYg1l9a69psu\" crossorigin=\"anonymous\">"
   "<link rel=\"stylesheet\" href=\"https://use.fontawesome.com/releases/v5.7.2/css/all.css\" integrity=\"sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr\" crossorigin=\"anonymous\">"
   "<style>"
@@ -184,13 +200,33 @@ String relayState(int relayno){
   return "";
 }
 
+String relayStateMqtt(int relayno){
+  if(RELAY_NO){
+    if(digitalRead(eeprom_read_single(gpioAddr+relayno))){
+      return "1";
+    }
+    else {
+      return "0";
+    }
+  }
+  else {
+    if(digitalRead(eeprom_read_single(gpioAddr+relayno))){
+      return "0";
+    }
+    else {
+      return "1";
+    }
+  }
+  return "0";
+}
+
 void handleRoot() {
   String buttons ="";
   for(int i=0; i<NUM_RELAYS; i++){
     buttons+= "<h4>Plug #" + String(i+1) + " - GPIO " + eeprom_read_single(gpioAddr+i) + "</h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"" + String(i) + "\" "+ relayState(i) +"><span class=\"slider\"></span></label>";
   }
   
-  String htmlRes  = headerHtml + "<body><h1 class=\"header\">Smart Plug</h1>"
+  String htmlRes  = headerHtml + "<body><h1 class=\"header\">"+html_title+"</h1>"
     "<h3 style=\"margin-bottom: 20px;\">"+currentDay+", "+currentDate+" "+hours+":"+minutes+":"+seconds+"</h3><hr>"
     "<p>"+logStr+"</p>"
     "<p>"+buttons+"</p>"
@@ -213,7 +249,7 @@ void handleRoot() {
 void handleSettings() {
   String htmlRes  = headerHtml + "<body><h1 class=\"header\">Settings</h1>"
     "<h3 style=\"margin-bottom: 20px;\">"+currentDay+", "+currentDate+" "+hours+":"+minutes+":"+seconds+"</h3><hr>"
-    "<p><a href=\"/wificonfig\"><button class=\"button button2\"><i class=\"fas fa-wifi\"></i> Wifi Config</button></a></p>"
+    "<p><a href=\"/wificonfig\"><button class=\"button button2\"><i class=\"fas fa-wifi\"></i> Network Config</button></a></p>"
     "<p><a href=\"/gpioconfig\"><button class=\"button button2\"><i class=\"fas fa-plug\"></i> Plug GPIO Config</button></a></p>"
     "<p><a href=\"/timerconfig\"><button class=\"button button2\"><i class=\"fas fa-clock\"></i> Timer Config</button></a></p>"
     "<p><a href=\"#\"><button class=\"button button2\" onclick=\"synctime()\"><i class=\"fas fa-clock\"></i> Sync Time</button></a></p>"
@@ -225,6 +261,7 @@ void handleSettings() {
     "var xhr = new XMLHttpRequest();"
     "xhr.open(\"GET\", \"/restart\", true);"
     "xhr.send();"
+    "}"
     "function synctime(element) {"
     "var xhr = new XMLHttpRequest();"
     "xhr.open(\"GET\", \"/synctime\", true);"
@@ -237,22 +274,24 @@ void handleSettings() {
 }
 
 void handleWifiConfigForm() {
-  String ssid = eeprom_read(ssidAddr, ssidLength);
-  String password = eeprom_read(pwdAddr, pwdLength);
-  String strIp = eeprom_read(ipAddr, ipLength);
-  String strSubnet = eeprom_read(ipSubnetAddr, ipLength);
-  String strGateway = eeprom_read(ipGatewayAddr, ipLength);
-  String strDNS = eeprom_read(ipDNSAddr, ipLength);
-  
-  String htmlRes  = headerHtml + "<body><h1 class=\"header\">Wifi Config</h1>"
+  String htmlRes  = headerHtml + "<body><h1 class=\"header\">Network Config</h1>"
     "<form method=post action=\"/savewificonfig\" style=\"margin: 20px\">"
-    "<p><b>SSID</b><br/><input type=text class=\"form-control\" name=ssid id=ssid value=\""+ssid+"\"><br/>(max 32 character)</p>"
-    "<p><b>Password</b><br/><input type=text class=\"form-control\" name=password id=password value=\""+password+"\"><br/>(max 32 character)</p>"
-    "<p>Manual Setting IP<br/>(leave empty if you want to use DHCP)</p>"
-    "<p><b>IP Address</b><br/><input type=text class=\"form-control\" name=ip id=ip value=\""+strIp+"\"></p>"
-    "<p><b>Subnet</b><br/><input type=text class=\"form-control\" name=subnet id=subnet value=\""+strSubnet+"\"></p>"
-    "<p><b>Gateway</b><br/><input type=text class=\"form-control\" name=gateway id=gateway value=\""+strGateway+"\"></p>"
-    "<p><b>DNS</b><br/><input type=text class=\"form-control\" name=dns id=dns value=\""+strDNS+"\"></p>"
+    "<p><h2>Wifi Config</h2></p>"
+    "<p><b>SSID</b><br/><input type=text class=\"form-control\" name=ssid id=ssid value=\""+eeprom_read(ssidAddr, ssidLength)+"\"><br/>(max 32 character)</p>"
+    "<p><b>Password</b><br/><input type=text class=\"form-control\" name=password id=password value=\""+eeprom_read(pwdAddr, pwdLength)+"\"><br/>(max 32 character)</p>"
+    "<p><h2>IP Config</h2></p>"
+    "<p>(leave empty if you want to use DHCP)</p>"
+    "<p><b>IP Address</b><br/><input type=text class=\"form-control\" name=ip id=ip value=\""+eeprom_read(ipAddr, ipLength)+"\"></p>"
+    "<p><b>Subnet</b><br/><input type=text class=\"form-control\" name=subnet id=subnet value=\""+eeprom_read(ipSubnetAddr, ipLength)+"\"></p>"
+    "<p><b>Gateway</b><br/><input type=text class=\"form-control\" name=gateway id=gateway value=\""+eeprom_read(ipGatewayAddr, ipLength)+"\"></p>"
+    "<p><b>DNS</b><br/><input type=text class=\"form-control\" name=dns id=dns value=\""+eeprom_read(ipDNSAddr, ipLength)+"\"></p>"
+    "<p><h2>MQTT Config</h2></p>"
+    "<p><b>Server Address</b><br/><input type=text class=\"form-control\" name=mqttserver id=mqttserver value=\""+eeprom_read(mqttServerAddr, ipLength)+"\"></p>"
+    "<p><b>port</b><br/><input type=text class=\"form-control\" name=mqttport id=mqttport value=\""+eeprom_read(mqttPortAddr, portLength)+"\"><br/>(max 4 character)</p>"
+    "<p><b>Username</b><br/><input type=text class=\"form-control\" name=mqttusername id=mqttusername value=\""+eeprom_read(mqttUsernameAddr, ssidLength)+"\"><br/>(max 32 character)</p>"
+    "<p><b>Password</b><br/><input type=text class=\"form-control\" name=mqttpassword id=mqttpassword value=\""+eeprom_read(mqttPasswordAddr, pwdLength)+"\"><br/>(max 32 character)</p>"
+    "<p><b>Topic</b><br/><input type=text class=\"form-control\" name=mqtttopic id=mqtttopic value=\""+eeprom_read(mqttTopicAddr, ssidLength)+"\"><br/>(max 32 character)</p>"
+    "<p><b>HTTP Api Host</b><br/><input type=text class=\"form-control\" name=httpapihost id=httpapihost value=\""+eeprom_read(httpApiHostAddr, ssidLength)+"\"><br/>(max 32 character)</p>"
     "<p><button type=submit value=Save class=\"button button2\"><i class=\"fas fa-save\"></i> Save</button> <button type=\"button\" onclick=\"window.location.href = '/';\" class=\"button button2\"><i class=\"fas fa-arrow-left\"></i> Cancel</button></p>"
     "</form>"
     "</body>"+footerHtml;
@@ -267,6 +306,12 @@ void handleSaveWifiConfigForm() {
   eeprom_write(server.arg("subnet"), ipSubnetAddr,ipLength);
   eeprom_write(server.arg("gateway"), ipGatewayAddr,ipLength);
   eeprom_write(server.arg("dns"), ipDNSAddr,ipLength);
+  eeprom_write(server.arg("mqttserver"), mqttServerAddr,ipLength);
+  eeprom_write(server.arg("mqttport"), mqttPortAddr,portLength);
+  eeprom_write(server.arg("mqttusername"), mqttUsernameAddr,ssidLength);
+  eeprom_write(server.arg("mqttpassword"), mqttPasswordAddr,pwdLength);
+  eeprom_write(server.arg("mqtttopic"), mqttTopicAddr,ssidLength);
+  eeprom_write(server.arg("httpapihost"), httpApiHostAddr,ssidLength);
   
   server.send(200, "text/html", savedNotifHtml);
 }
@@ -304,10 +349,8 @@ void handleSaveGPIOConfigForm() {
 void handleTimerConfigForm() {
   String inputForm="";
   for(int i=0; i<NUM_RELAYS; i++){
-    String strTimerOn = eeprom_read(timeOnAddr+(i*timeLength), timeLength);
-    String strTimerOff = eeprom_read(timeOffAddr+(i*timeLength), timeLength);
-    inputForm += "<p><b>Timer Plug #"+String(i+1)+" On</b></br><input type=text class=\"form-control\" name=gpioon"+i+" id=gpioon"+i+" value=\""+strTimerOn+"\"></p>";
-    inputForm += "<p><b>Timer Plug #"+String(i+1)+" Off</b></br><input type=text class=\"form-control\" name=gpiooff"+i+" id=gpiooff"+i+" value=\""+strTimerOff+"\"></p>";
+    inputForm += "<p><b>Timer Plug #"+String(i+1)+" On</b></br><input type=text class=\"form-control\" name=gpioon"+i+" id=gpioon"+i+" value=\""+eeprom_read(timeOnAddr+(i*timeLength), timeLength)+"\"></p>";
+    inputForm += "<p><b>Timer Plug #"+String(i+1)+" Off</b></br><input type=text class=\"form-control\" name=gpiooff"+i+" id=gpiooff"+i+" value=\""+eeprom_read(timeOffAddr+(i*timeLength), timeLength)+"\"></p>";
   }
   
   String htmlRes  = headerHtml + "<body><h1 class=\"header\">Timer Config</h1>"
@@ -345,6 +388,7 @@ void handleRestart() {
 
 void handleSyncTime() {
   syncTime();
+  server.send(200, "text/plain", "OK");
 }
 
 void updateRelay(int relayno, int relaystate){
@@ -500,33 +544,78 @@ void updateTime(){
 }
 
 void mqttConnect() {
-  client.setServer(mqtt_server, 1883);
+  client.setServer(mqtt_server, mqtt_port);
   client.setCallback(callback);
   while (!client.connected()) {
     if (client.connect(ap_hostname, mqtt_user, mqtt_password)) {
-      client.subscribe(topic);
+      client.subscribe(mqtt_topic);
     } else {
       delay(5000);
     }
   }
 }
 
-void callback(char* topic, byte* payload, unsigned int length) {
+void callback(char* mqtt_topic, byte* payload, unsigned int length) {
   String relayno = "";
-  for (int i = 2; i < length; i++) {
+  String deviceid = "";
+  int nextDataIndex = 2;
+  // GET Switch Number
+  for (int i = nextDataIndex; i < length; i++) {
+    if ((char)payload[i] == '|') {
+      nextDataIndex = i+1;
+      break;
+    }
     relayno += (char)payload[i];
   }
-  
-  if ((char)payload[0] == '1') {
-    updateRelay(relayno.toInt(),1);
-  }else{
-    updateRelay(relayno.toInt(),0);
+
+  // GET Device ID
+  for (int i = nextDataIndex; i < length; i++) {
+    if ((char)payload[i] == '|') {
+      nextDataIndex = i+1;
+      break;
+    }
+    deviceid += (char)payload[i];
   }
+
+  if ((char)payload[0] == '1') {
+    String datastate = "";
+    for(int i=0; i<NUM_RELAYS; i++){
+      datastate+= String(i)+"-"+relayStateMqtt(i)+";";
+    }
+    httpPostCall(http_api_host+"/device/action/state?id="+deviceid,datastate);
+  }else if ((char)payload[0] == '2') {
+    if ((char)payload[1] == '1') {
+      updateRelay(relayno.toInt(),1);
+    }else{
+      updateRelay(relayno.toInt(),0);
+    }
+  }
+}
+
+void httpPostCall(String url, String postData){
+  httpClient.begin(url);
+  httpClient.addHeader("Content-Type", "text/plain");
+  int httpCode = httpClient.POST(postData);
+  httpClient.end();
+}
+
+
+void httpGetCall(String url){
+  httpClient.begin(url);
+  int httpCode = httpClient.GET();
+  httpClient.end();
 }
 
 void setup() {
   Serial.begin(115200);
   delay(100);
+
+//  mqtt_server = eeprom_read(mqttServerAddr, ipLength).c_str();
+//  mqtt_port = eeprom_read(mqttPortAddr, portLength).toInt();
+//  mqtt_user = eeprom_read(mqttUsernameAddr, ssidLength).c_str();
+//  mqtt_password = eeprom_read(mqttPasswordAddr, pwdLength).c_str();
+//  mqtt_topic = eeprom_read(mqttTopicAddr, ssidLength).c_str();
+//  http_api_host = eeprom_read(httpApiHostAddr, ssidLength);
 
   // Initialize Access Point
   WiFi.softAP(ap_ssid, ap_password);
@@ -626,12 +715,14 @@ void loop(){
     }
 
     // MQTT
-//    if(WiFi.status() == WL_CONNECTED){
-//      if (!client.connected()) {
-//        mqttConnect();
-//      }
-//      client.loop();
-//    }
+    if(mqtt_topic!=""){
+      if(WiFi.status() == WL_CONNECTED){
+        if (!client.connected()) {
+          mqttConnect();
+        }
+        client.loop();
+      }
+    }
     
     // Execute Timer
     String checkTime = String(hours)+":"+String(minutes)+":"+String(seconds);    

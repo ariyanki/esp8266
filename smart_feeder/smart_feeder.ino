@@ -14,8 +14,8 @@ int servoTo = 0;
 
 // #### Network Configuration ####
 // Access Point network credentials
-const char* hostname     = "pakanikan";
-const char* ap_ssid     = "pakanikan";
+const char* hostname     = "pakanikan1";
+const char* ap_ssid     = "pakanikan1";
 const char* ap_password = "esp826612345";
 bool wifiConnected = false;
 
@@ -112,22 +112,6 @@ int eeprom_read_single(int addr) {
   return EEPROM.read(addr);
 }
 
-
-void readTimer(){
-  // GET timer for EEPROM
-  String strTime = eeprom_read(timeAddr, timeLength);
-  int f = 0, r=0;
-  for (int i=0; i < strTime.length(); i++)
-  { 
-   if(strTime.charAt(i) == ';') 
-    { 
-      timer[f] = strTime.substring(r, i); 
-      r=(i+1); 
-      f++;
-    }
-  }
-}
-
 // #### HTTP Configuration ####
 
 String logStr = "";
@@ -206,6 +190,7 @@ void handleSettings() {
     "var xhr = new XMLHttpRequest();"
     "xhr.open(\"GET\", \"/restart\", true);"
     "xhr.send();"
+    "}"
     "function synctime(element) {"
     "var xhr = new XMLHttpRequest();"
     "xhr.open(\"GET\", \"/synctime\", true);"
@@ -397,6 +382,21 @@ void connectToWifi(){
   }
 }
 
+void readTimer(){
+  // GET timer for EEPROM
+  String strTime = eeprom_read(timeAddr, timeLength);
+  int f = 0, r=0;
+  for (int i=0; i < strTime.length(); i++)
+  { 
+   if(strTime.charAt(i) == ';') 
+    { 
+      timer[f] = strTime.substring(r, i); 
+      r=(i+1); 
+      f++;
+    }
+  }
+}
+
 void syncTime(){
   if (wifiConnected){
     timeClient.update();
@@ -452,14 +452,6 @@ void setup() {
   WiFi.softAP(ap_ssid, ap_password);
   Serial.print("visit: \n"); 
   Serial.println(WiFi.softAPIP());
-
-//      in case want to try write manually
-//    eeprom_write("ssid", ssidAddr,ssidLength);
-//    eeprom_write("password", pwdAddr,pwdLength);
-//    eeprom_write("192.168.1.113", ipAddr,ipLength);
-//    eeprom_write("255.255.255.0", ipSubnetAddr,ipLength);
-//    eeprom_write("192.168.1.1", ipGatewayAddr,ipLength);
-//    eeprom_write("192.168.1.1", ipDNSAddr,ipLength);
 
   connectToWifi();
   readTimer();
